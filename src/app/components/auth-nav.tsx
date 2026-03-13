@@ -12,14 +12,20 @@ export async function AuthNav() {
   const config = await getSiteConfig();
   const isAdmin = session?.user?.role === "ADMIN";
   const isSeller = session?.user?.role === "SELLER";
-  const unreadNotifications = session?.user?.id
-    ? await prisma.notification.count({
+  let unreadNotifications = 0;
+
+  if (session?.user?.id) {
+    try {
+      unreadNotifications = await prisma.notification.count({
         where: {
           userId: session.user.id,
           readAt: null,
         },
-      })
-    : 0;
+      });
+    } catch (error) {
+      console.warn("AuthNav notification count unavailable, defaulting to 0.", error);
+    }
+  }
 
   return (
     <header className="border-b border-(--accent-terra) bg-(--accent-beige)/80 backdrop-blur">
