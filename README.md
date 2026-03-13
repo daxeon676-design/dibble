@@ -1,36 +1,72 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Dibble
 
-## Getting Started
+Dibble is a marketplace where users sign up as buyers first, then optionally apply to become approved sellers. Admins review seller applications.
 
-First, run the development server:
+## Current implementation status
+
+- Next.js 16 app scaffolded with TypeScript and App Router.
+- Prisma schema implemented for users, seller applications, products, carts, orders, payments, and audit logs.
+- Seed script added for a default admin account.
+- Rollback and setup documentation added.
+
+## Local setup
+
+1. Install dependencies.
+
+```bash
+npm install
+```
+
+2. Start PostgreSQL.
+
+```bash
+docker compose up -d
+```
+
+3. Copy `.env.example` to `.env` and update secrets.
+
+	For card payments in buyer orders, set both `STRIPE_SECRET_KEY` and `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`.
+
+4. Generate Prisma client and create tables.
+
+```bash
+npm run db:generate
+npm run db:migrate -- --name init
+npm run db:seed
+```
+
+5. Start the app.
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Database scripts
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- `npm run db:generate` - generate Prisma client.
+- `npm run db:migrate -- --name <name>` - create/apply local migration.
+- `npm run db:deploy` - apply existing migrations (staging/prod).
+- `npm run db:seed` - seed default admin.
+- `npm run db:studio` - inspect data in Prisma Studio.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Testing
 
-## Learn More
+- `npm run test` - run unit tests for checkout grouping, payment finalization plan, and order status rules.
 
-To learn more about Next.js, take a look at the following resources:
+## Seller product media
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- Sellers can add image URLs (one URL per line) when creating or editing products.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Rollback notes
 
-## Deploy on Vercel
+- Tag each release (for example `v0.1.0`).
+- Take a DB backup before production migrations.
+- Prefer forward-fix migrations over destructive down migrations in production.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+See `docs/ROLLBACK.md` for the full runbook.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Launch execution
+
+- `docs/LAUNCH_PLAN.md` - 4-week production hardening and launch timeline.
+- `docs/PRELAUNCH_CHECKLIST.md` - release candidate and go-live checklist.
+- `docs/MONITORING.md` - operations dashboard, metrics endpoint, and alert thresholds.
