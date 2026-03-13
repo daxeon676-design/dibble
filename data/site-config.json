@@ -1,0 +1,9 @@
+{
+  "categories": ["Art", "Home Decor", "Jewelry", "Prints", "Ceramics"],
+  "deliveryOptions": [
+    { "id": "standard", "name": "Standard Delivery", "costPence": 399, "enabled": true },
+    { "id": "express", "name": "Express Delivery", "costPence": 799, "enabled": true }
+  ],
+  "homepageTagline": "Shop the latest handcrafted products from talented artists around the world.",
+  "footerDescription": "Shop the latest handcrafted products from talented artists around the world."
+}
