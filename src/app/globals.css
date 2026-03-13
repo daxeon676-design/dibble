@@ -2,7 +2,10 @@
 
 :root {
   --background: #ffffff;
-  --foreground: #171717;
+  --foreground: #0f172a;
+  --accent-terra: #d36e2f; /* terracotta orange */
+  --accent-beige: #e9d8c3;
+  --accent-green: #a3a847;
 }
 
 @theme inline {
@@ -14,13 +17,36 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #ffffff;
+    --foreground: #0f172a;
+    --accent-terra: #d36e2f;
+    --accent-beige: #e9d8c3;
+    --accent-green: #a3a847;
   }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+}
+
+/* Improve readability for existing dark utility usage without rewriting every page. */
+.text-slate-100,
+.text-slate-200,
+.text-slate-300,
+.text-slate-400,
+.text-slate-500 {
+  color: #1e293b !important;
+}
+
+.bg-slate-900,
+.bg-slate-950,
+.bg-slate-800 {
+  background-color: #ffffff !important;
+}
+
+.border-slate-700,
+.border-slate-800 {
+  border-color: #cbd5e1 !important;
 }

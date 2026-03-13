@@ -1,0 +1,34 @@
+import { getServerSession } from "next-auth";
+import { redirect } from "next/navigation";
+
+import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { BuyerCartClient } from "@/app/buyer/cart/cart-client";
+
+export default async function BuyerCartPage() {
+  const session = await getServerSession(authOptions);
+
+  if (!session?.user) {
+    redirect("/login?callbackUrl=/buyer/cart");
+  }
+
+  const cart = await prisma.cart.findUnique({
+    where: { buyerId: session.user.id },
+    include: {
+      items: {
+        include: {
+          product: {
+            select: {
+              id: true,
+              title: true,
+              stock: true,
+              imageUrls: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  return <BuyerCartClient initialCart={cart} />;
+}
