@@ -41,6 +41,11 @@ npm run db:seed
 npm run dev
 ```
 
+Notes:
+- `npm run dev` uses Webpack for local stability.
+- `npm run dev:turbo` runs Turbopack explicitly.
+- If Turbopack panics, stop the server, remove `.next/dev`, and retry with `npm run dev`.
+
 ## Database scripts
 
 - `npm run db:generate` - generate Prisma client.

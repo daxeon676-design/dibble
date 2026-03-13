@@ -78,74 +78,78 @@ export default async function Home() {
   let popularProducts: Array<ProductWithSeller & { seller: SellerSnippet }> = [];
 
   if (!isBuildPhase) {
-    const newArrivals = await prisma.product.findMany({
-      where: {
-        status: ProductStatus.ACTIVE,
-        stock: { gt: 0 },
-      },
-      select: {
-        id: true,
-        sellerId: true,
-        title: true,
-        priceCents: true,
-        stock: true,
-      },
-      orderBy: { createdAt: "desc" },
-      take: 12,
-    });
-
-    const popularOrderItems = await prisma.orderItem.groupBy({
-      by: ["productId"],
-      _sum: { quantity: true },
-      orderBy: {
-        _sum: {
-          quantity: "desc",
+    try {
+      const newArrivals = await prisma.product.findMany({
+        where: {
+          status: ProductStatus.ACTIVE,
+          stock: { gt: 0 },
         },
-      },
-      take: 20,
-    });
+        select: {
+          id: true,
+          sellerId: true,
+          title: true,
+          priceCents: true,
+          stock: true,
+        },
+        orderBy: { createdAt: "desc" },
+        take: 12,
+      });
 
-    const popularProductIds = popularOrderItems.map((item) => item.productId);
-    const popularProductsRaw =
-      popularProductIds.length === 0
-        ? []
-        : await prisma.product.findMany({
-            where: {
-              id: { in: popularProductIds },
-              status: ProductStatus.ACTIVE,
-              stock: { gt: 0 },
-            },
-            select: {
-              id: true,
-              sellerId: true,
-              title: true,
-              priceCents: true,
-              stock: true,
-            },
-          });
+      const popularOrderItems = await prisma.orderItem.groupBy({
+        by: ["productId"],
+        _sum: { quantity: true },
+        orderBy: {
+          _sum: {
+            quantity: "desc",
+          },
+        },
+        take: 20,
+      });
 
-    const sellerIds = [...new Set([...newArrivals, ...popularProductsRaw].map((product) => product.sellerId))];
-    const sellers =
-      sellerIds.length === 0
-        ? []
-        : await prisma.user.findMany({
-            where: { id: { in: sellerIds } },
-            select: {
-              id: true,
-              displayName: true,
-              email: true,
-            },
-          });
+      const popularProductIds = popularOrderItems.map((item) => item.productId);
+      const popularProductsRaw =
+        popularProductIds.length === 0
+          ? []
+          : await prisma.product.findMany({
+              where: {
+                id: { in: popularProductIds },
+                status: ProductStatus.ACTIVE,
+                stock: { gt: 0 },
+              },
+              select: {
+                id: true,
+                sellerId: true,
+                title: true,
+                priceCents: true,
+                stock: true,
+              },
+            });
 
-    const sellerMap = new Map(sellers.map((seller) => [seller.id, { displayName: seller.displayName, email: seller.email }]));
-    newArrivalsWithSellers = attachSellers(newArrivals, sellerMap);
+      const sellerIds = [...new Set([...newArrivals, ...popularProductsRaw].map((product) => product.sellerId))];
+      const sellers =
+        sellerIds.length === 0
+          ? []
+          : await prisma.user.findMany({
+              where: { id: { in: sellerIds } },
+              select: {
+                id: true,
+                displayName: true,
+                email: true,
+              },
+            });
 
-    const popularProductsRawWithSellers = attachSellers(popularProductsRaw, sellerMap);
-    const popularProductsMap = new Map(popularProductsRawWithSellers.map((product) => [product.id, product]));
-    popularProducts = popularProductIds
-      .map((id) => popularProductsMap.get(id))
-      .filter((product): product is ProductWithSeller & { seller: SellerSnippet } => Boolean(product))
-      .slice(0, 12);
+      const sellerMap = new Map(sellers.map((seller) => [seller.id, { displayName: seller.displayName, email: seller.email }]));
+      newArrivalsWithSellers = attachSellers(newArrivals, sellerMap);
+
+      const popularProductsRawWithSellers = attachSellers(popularProductsRaw, sellerMap);
+      const popularProductsMap = new Map(popularProductsRawWithSellers.map((product) => [product.id, product]));
+      popularProducts = popularProductIds
+        .map((id) => popularProductsMap.get(id))
+        .filter((product): product is ProductWithSeller & { seller: SellerSnippet } => Boolean(product))
+        .slice(0, 12);
+    } catch (error) {
+      console.warn("Home page product feed unavailable, rendering without carousels.", error);
+    }
   }
 
   return (
