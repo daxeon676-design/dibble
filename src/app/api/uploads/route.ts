@@ -1,0 +1,71 @@
+import { getServerSession } from "next-auth";
+import { NextResponse } from "next/server";
+import { randomUUID } from "node:crypto";
+import fs from "node:fs/promises";
+import path from "node:path";
+
+import { authOptions } from "@/lib/auth";
+import { checkRateLimit } from "@/lib/rate-limit";
+
+const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+
+const extensionByMime: Record<string, string> = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/webp": "webp",
+  "image/gif": "gif",
+};
+
+export async function POST(request: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const rateLimit = checkRateLimit(request, {
+    scope: "uploads",
+    limit: 20,
+    windowMs: 60_000,
+    key: `user:${session.user.id}`,
+  });
+
+  if (!rateLimit.ok) {
+    return NextResponse.json(
+      { error: "Too many upload requests. Please wait and try again." },
+      {
+        status: 429,
+        headers: { "Retry-After": String(rateLimit.retryAfterSeconds) },
+      },
+    );
+  }
+
+  const formData = await request.formData();
+  const file = formData.get("file");
+
+  if (!(file instanceof File)) {
+    return NextResponse.json({ error: "File is required" }, { status: 400 });
+  }
+
+  if (!extensionByMime[file.type]) {
+    return NextResponse.json({ error: "Unsupported image format" }, { status: 400 });
+  }
+
+  if (file.size <= 0 || file.size > MAX_UPLOAD_BYTES) {
+    return NextResponse.json(
+      { error: "File must be between 1 byte and 5MB." },
+      { status: 400 },
+    );
+  }
+
+  const bytes = await file.arrayBuffer();
+  const buffer = Buffer.from(bytes);
+  const ext = extensionByMime[file.type];
+  const fileName = `${Date.now()}-${randomUUID()}.${ext}`;
+
+  const uploadDir = path.join(process.cwd(), "public", "uploads");
+  await fs.mkdir(uploadDir, { recursive: true });
+  const outputPath = path.join(uploadDir, fileName);
+  await fs.writeFile(outputPath, buffer);
+
+  return NextResponse.json({ url: `/uploads/${fileName}` });
+}
