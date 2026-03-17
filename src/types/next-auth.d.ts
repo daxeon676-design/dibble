@@ -8,6 +8,7 @@ declare module "next-auth" {
       id: string;
       role: Role;
       status: UserStatus;
+      mfaEnabled: boolean;
     };
   }
 
@@ -15,6 +16,7 @@ declare module "next-auth" {
     id: string;
     role: Role;
     status: UserStatus;
+    mfaEnabled: boolean;
     rememberMe?: boolean;
   }
 }
@@ -24,6 +26,7 @@ declare module "next-auth/jwt" {
     id?: string;
     role?: Role;
     status?: UserStatus;
+    mfaEnabled?: boolean;
     rememberMe?: boolean;
   }
 }

@@ -1,6 +1,5 @@
 import { getServerSession } from "next-auth";
 import Link from "next/link";
-import { redirect } from "next/navigation";
 
 import { ProductStatus } from "@/generated/prisma/enums";
 import { authOptions } from "@/lib/auth";
@@ -16,9 +15,6 @@ export default async function BuyerMarketplacePage({
   searchParams: Promise<{ q?: string; seller?: string; category?: string; sort?: string; min?: string; max?: string }>;
 }) {
   const session = await getServerSession(authOptions);
-  if (!session?.user) {
-    redirect("/login?callbackUrl=/buyer/marketplace");
-  }
 
   const { q, seller, category, sort, min, max } = await searchParams;
   const query = q?.trim() ?? "";
@@ -72,20 +68,22 @@ export default async function BuyerMarketplacePage({
   }
 
   return (
-    <main className="mx-auto min-h-screen max-w-6xl px-6 py-16 text-slate-100">
+    <main className="mx-auto min-h-screen max-w-7xl px-6 py-10 text-foreground">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-3xl font-semibold">Marketplace</h1>
-        <div className="flex gap-2">
-          <Link href="/buyer/cart" className="rounded-md bg-emerald-500 px-4 py-2 font-semibold text-slate-950">
-            View Cart
-          </Link>
-          <Link href="/buyer/orders" className="rounded-md border border-slate-700 px-4 py-2">
-            My Orders
-          </Link>
-        </div>
+        <h1 className="text-3xl font-bold text-foreground">Marketplace</h1>
+        {session?.user && (
+          <div className="flex gap-2">
+            <Link href="/buyer/cart" className="rounded-full bg-(--accent-terra) px-4 py-2 text-sm font-semibold text-white hover:opacity-90 transition-opacity">
+              View Cart
+            </Link>
+            <Link href="/buyer/orders" className="rounded-full border border-(--accent-terra)/40 px-4 py-2 text-sm text-(--accent-terra) hover:bg-(--accent-beige)/40 transition-colors">
+              My Orders
+            </Link>
+          </div>
+        )}
       </div>
 
-      {/* Search bar */}
+  {/* Search bar */}
       <div className="mb-8">
         <MarketplaceSearch
           defaultValue={query}
@@ -98,13 +96,13 @@ export default async function BuyerMarketplacePage({
       </div>
 
       {/* Result count */}
-      <p className="text-sm text-slate-400 mb-4">
+      <p className="text-sm text-foreground/60 mb-4">
         {query ? (
           <>
-            Showing <strong className="text-slate-200">{products.length}</strong> result
+            Showing <strong className="text-foreground">{products.length}</strong> result
             {products.length !== 1 && "s"} for &ldquo;{query}&rdquo;
             {" · "}
-            <Link href="/buyer/marketplace" className="text-emerald-400 hover:underline">
+            <Link href="/buyer/marketplace" className="text-(--accent-terra) hover:underline">
               Clear
             </Link>
           </>
@@ -114,54 +112,64 @@ export default async function BuyerMarketplacePage({
       </p>
 
       {products.length === 0 ? (
-        <div className="py-20 text-center text-slate-400">
-          <p className="text-xl mb-2">No products found</p>
-          <p className="text-sm">Try a different search term.</p>
+        <div className="py-20 text-center space-y-3">
+          <p className="text-5xl">🔍</p>
+          <p className="text-xl font-semibold text-foreground/70">No products found</p>
+          <p className="text-sm text-foreground/50">Try a different search term or browse categories from the menu.</p>
+          <Link href="/buyer/marketplace" className="inline-block mt-2 text-sm text-(--accent-terra) hover:underline">
+            Clear filters
+          </Link>
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {products.map((product) => (
-            <article key={product.id} className="rounded-md border border-slate-800 bg-slate-900 p-4">
+            <article key={product.id} className="group rounded-xl border border-(--accent-terra)/15 bg-white shadow-sm hover:shadow-md transition-shadow overflow-hidden">
               <Link href={`/products/${product.id}`} className="block">
                 {product.imageUrls[0] ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={product.imageUrls[0]}
                     alt={product.title}
-                    className="mb-3 h-40 w-full rounded-md border border-slate-700 object-cover"
+                    className="h-44 w-full object-cover group-hover:opacity-95 transition-opacity"
                   />
-                ) : null}
-                <h2 className="text-lg font-semibold">{product.title}</h2>
+                ) : (
+                  <div className="h-44 w-full bg-(--accent-beige)/40 flex items-center justify-center text-sm text-foreground/40">
+                    No image
+                  </div>
+                )}
               </Link>
-              <Link
-                href={`/shop/${product.seller.id}`}
-                className="text-sm text-emerald-400 hover:underline"
-              >
-                {product.seller.displayName ?? product.seller.email}
-              </Link>
-              <p className="mt-2 text-sm text-slate-300">{product.description}</p>
-              <p className="mt-3 text-sm text-(--accent-terra)">£{(product.priceCents / 100).toFixed(2)}</p>
-              <Link href={`/products/${product.id}`} className="mt-1 block text-xs text-emerald-400 hover:underline">
-                View full details
-              </Link>
-              <AddToCartButton productId={product.id} />
-              <div className="mt-2 flex flex-wrap gap-2">
-                <SavedItemButton
-                  listType="wishlist"
-                  item={{
-                    id: product.id,
-                    label: product.title,
-                    href: `/products/${product.id}`,
-                  }}
-                />
-                <SavedItemButton
-                  listType="favourite-products"
-                  item={{
-                    id: product.id,
-                    label: product.title,
-                    href: `/products/${product.id}`,
-                  }}
-                />
+              <div className="p-4 space-y-2">
+                <Link href={`/products/${product.id}`} className="block">
+                  <h2 className="font-semibold text-foreground leading-snug line-clamp-2 group-hover:text-(--accent-terra) transition-colors">
+                    {product.title}
+                  </h2>
+                </Link>
+                <Link href={`/shop/${product.seller.id}`} className="text-xs text-(--accent-green) hover:underline block truncate">
+                  {product.seller.displayName ?? product.seller.email}
+                </Link>
+                <p className="text-sm font-bold text-(--accent-terra)">£{(product.priceCents / 100).toFixed(2)}</p>
+                {session?.user ? (
+                  <>
+                    <AddToCartButton productId={product.id} />
+                    <div className="flex gap-2 flex-wrap pt-1">
+                      <SavedItemButton
+                        listType="wishlist"
+                        item={{ id: product.id, label: product.title, href: `/products/${product.id}` }}
+                      />
+                      <SavedItemButton
+                        listType="favourite-products"
+                        item={{ id: product.id, label: product.title, href: `/products/${product.id}` }}
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <Link
+                    href={`/login?callbackUrl=/products/${product.id}`}
+                    className="mt-1 inline-block rounded-full border border-(--accent-terra) px-3 py-1 text-xs font-medium text-(--accent-terra) hover:bg-(--accent-terra) hover:text-white transition-colors"
+                  >
+                    Sign in to buy
+                  </Link>
+                )}
               </div>
             </article>
           ))}

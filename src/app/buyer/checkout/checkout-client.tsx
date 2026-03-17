@@ -71,6 +71,7 @@ export function CheckoutClient({
 }: Props) {
   const [currentStep, setCurrentStep] = useState<CheckoutState>("address");
   const [error, setError] = useState<string | null>(null);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
   const hasSavedAddresses = initialSavedAddresses.length > 0;
@@ -116,6 +117,7 @@ export function CheckoutClient({
   function handleAddressSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
+    setPaymentError(null);
 
     const addressToValidate = selectedAddressMode === "saved"
       ? initialSavedAddresses.find((addr) => addr.id === selectedAddressId)
@@ -141,6 +143,7 @@ export function CheckoutClient({
 
   async function handlePayment() {
     setIsProcessing(true);
+    setPaymentError(null);
     setError(null);
 
     try {
@@ -168,7 +171,8 @@ export function CheckoutClient({
       // Order creation succeeded, continue to payment from orders page.
       window.location.href = "/buyer/orders";
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Checkout failed.");
+      const message = requestError instanceof Error ? requestError.message : "Checkout failed.";
+      setPaymentError(message);
       setIsProcessing(false);
     }
   }
@@ -357,13 +361,26 @@ export function CheckoutClient({
           {currentStep === "payment" ? (
             <section className="rounded-md border border-emerald-700 bg-slate-900 p-6">
               <h2 className="mb-4 text-xl font-semibold">3. Payment</h2>
+              <p className="mb-3 text-sm text-slate-300">
+                We will create your order now, then you can securely complete card payment on your orders page.
+              </p>
+
+              {paymentError ? (
+                <div className="mb-4 rounded-md border border-red-700 bg-red-950 p-4 text-sm">
+                  <p className="font-semibold text-red-300">Order creation failed</p>
+                  <p className="mt-1 text-red-400">{paymentError}</p>
+                  <p className="mt-2 text-red-500">Your cart has not been charged. You can try again below or{" "}
+                    <Link href="/buyer/cart" className="underline hover:text-red-400">return to your cart</Link>.</p>
+                </div>
+              ) : null}
+
               <button
                 type="button"
                 onClick={handlePayment}
                 disabled={isProcessing}
                 className="w-full rounded-md bg-emerald-600 px-4 py-3 font-semibold text-slate-950 hover:bg-emerald-500 disabled:opacity-60"
               >
-                {isProcessing ? "Creating order..." : "Proceed to Payment"}
+                {isProcessing ? "Creating order..." : paymentError ? "Try Again" : "Create Order and Continue"}
               </button>
               <Link href="/buyer/cart" className="mt-3 block text-center text-sm text-slate-400 hover:text-slate-300">
                 Cancel and return to cart

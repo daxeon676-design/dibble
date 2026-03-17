@@ -19,8 +19,15 @@ export async function generateMetadata({ params }: { params: Promise<{ sellerId:
   return { title: `${seller.displayName ?? seller.email} – Dibble` };
 }
 
-export default async function SellerShopPage({ params }: { params: Promise<{ sellerId: string }> }) {
+export default async function SellerShopPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ sellerId: string }>;
+  searchParams: Promise<{ tab?: string; sort?: string }>;
+}) {
   const { sellerId } = await params;
+  const { tab, sort } = await searchParams;
   const session = await getServerSession(authOptions);
 
   const [seller, shopProfile, followersCount, isFollowing] = await Promise.all([
@@ -57,6 +64,44 @@ export default async function SellerShopPage({ params }: { params: Promise<{ sel
     where: { sellerId, status: ProductStatus.ACTIVE, stock: { gt: 0 } },
     orderBy: { createdAt: "desc" },
   });
+
+  const newArrivals = [...products]
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+    .slice(0, 8);
+  const underTwentyFive = products.filter((product) => product.priceCents <= 2500);
+
+  const selectedTab = tab === "new" || tab === "under-25" ? tab : "all";
+  const selectedSort = sort === "price-asc" || sort === "price-desc" || sort === "name-asc" ? sort : "newest";
+
+  const tabProducts =
+    selectedTab === "new"
+      ? newArrivals
+      : selectedTab === "under-25"
+        ? underTwentyFive
+        : products;
+
+  const visibleProducts =
+    selectedSort === "price-asc"
+      ? [...tabProducts].sort((a, b) => a.priceCents - b.priceCents)
+      : selectedSort === "price-desc"
+        ? [...tabProducts].sort((a, b) => b.priceCents - a.priceCents)
+        : selectedSort === "name-asc"
+          ? [...tabProducts].sort((a, b) => a.title.localeCompare(b.title))
+          : [...tabProducts].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+
+  const tabCounts = {
+    all: products.length,
+    new: newArrivals.length,
+    under: underTwentyFive.length,
+  };
+
+  const buildShopUrl = (nextTab: string, nextSort: string) => {
+    const query = new URLSearchParams();
+    if (nextTab !== "all") query.set("tab", nextTab);
+    if (nextSort !== "newest") query.set("sort", nextSort);
+    const qs = query.toString();
+    return qs ? `/shop/${sellerId}?${qs}` : `/shop/${sellerId}`;
+  };
 
   const shopName = seller.sellerApplication?.shopName ?? seller.displayName ?? seller.email;
   const shopDesc = shopProfile.description || seller.sellerApplication?.description || seller.bio;
@@ -106,38 +151,75 @@ export default async function SellerShopPage({ params }: { params: Promise<{ sel
       </div>
 
       {/* Products */}
-      <h2 className="text-xl font-semibold mb-4">
-        {products.length} product{products.length !== 1 && "s"} available
-      </h2>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-xl font-semibold text-foreground">
+          {visibleProducts.length} product{visibleProducts.length !== 1 && "s"} in this section
+        </h2>
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <Link
+            href={buildShopUrl("all", selectedSort)}
+            className={`rounded-full border px-3 py-1 ${selectedTab === "all" ? "border-(--accent-terra) bg-(--accent-terra) text-white" : "border-(--accent-terra)/30 bg-white text-foreground"}`}
+          >
+            All Items ({tabCounts.all})
+          </Link>
+          <Link
+            href={buildShopUrl("new", selectedSort)}
+            className={`rounded-full border px-3 py-1 ${selectedTab === "new" ? "border-(--accent-terra) bg-(--accent-terra) text-white" : "border-(--accent-terra)/30 bg-white text-foreground"}`}
+          >
+            New Arrivals ({tabCounts.new})
+          </Link>
+          <Link
+            href={buildShopUrl("under-25", selectedSort)}
+            className={`rounded-full border px-3 py-1 ${selectedTab === "under-25" ? "border-(--accent-terra) bg-(--accent-terra) text-white" : "border-(--accent-terra)/30 bg-white text-foreground"}`}
+          >
+            Under £25 ({tabCounts.under})
+          </Link>
+        </div>
+      </div>
 
-      {products.length === 0 ? (
+      <div className="mb-5 flex flex-wrap gap-2 text-xs">
+        <Link href={buildShopUrl(selectedTab, "newest")} className={`rounded-full border px-3 py-1 ${selectedSort === "newest" ? "border-(--accent-terra) bg-(--accent-beige)" : "border-(--accent-terra)/20"}`}>
+          Newest
+        </Link>
+        <Link href={buildShopUrl(selectedTab, "price-asc")} className={`rounded-full border px-3 py-1 ${selectedSort === "price-asc" ? "border-(--accent-terra) bg-(--accent-beige)" : "border-(--accent-terra)/20"}`}>
+          Price Low to High
+        </Link>
+        <Link href={buildShopUrl(selectedTab, "price-desc")} className={`rounded-full border px-3 py-1 ${selectedSort === "price-desc" ? "border-(--accent-terra) bg-(--accent-beige)" : "border-(--accent-terra)/20"}`}>
+          Price High to Low
+        </Link>
+        <Link href={buildShopUrl(selectedTab, "name-asc")} className={`rounded-full border px-3 py-1 ${selectedSort === "name-asc" ? "border-(--accent-terra) bg-(--accent-beige)" : "border-(--accent-terra)/20"}`}>
+          Name A-Z
+        </Link>
+      </div>
+
+      {visibleProducts.length === 0 ? (
         <p className="text-gray-500">This seller has no active listings right now.</p>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {products.map((product) => (
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {visibleProducts.map((product) => (
             <Link
               key={product.id}
               href={`/products/${product.id}`}
-              className="border rounded-lg overflow-hidden hover:shadow-md transition group"
+              className="group overflow-hidden rounded-xl border border-(--accent-terra)/20 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
             >
               {product.imageUrls[0] ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={product.imageUrls[0]}
                   alt={product.title}
-                  className="h-40 w-full object-cover group-hover:scale-105 transition"
+                  className="h-44 w-full object-cover transition group-hover:opacity-95"
                 />
               ) : (
-                <div className="h-40 bg-gray-100 flex items-center justify-center text-3xl">🥦</div>
+                <div className="flex h-44 items-center justify-center bg-(--accent-beige)/40 text-sm text-foreground/40">No image</div>
               )}
-              <div className="p-3">
-                <h3 className="font-medium">{product.title}</h3>
-                <p className="text-sm text-gray-500 mt-0.5 line-clamp-2">{product.description}</p>
-                <div className="flex items-center justify-between mt-2">
-                  <span className="font-semibold text-(--accent-terra)">
+              <div className="space-y-2 p-4">
+                <h3 className="line-clamp-2 text-sm font-semibold text-foreground">{product.title}</h3>
+                <p className="line-clamp-2 text-xs text-foreground/60">{product.description}</p>
+                <div className="mt-1 flex items-center justify-between">
+                  <span className="text-sm font-semibold text-(--accent-terra)">
                     £{(product.priceCents / 100).toFixed(2)}
                   </span>
-                  <span className="text-xs text-gray-400">View details</span>
+                  <span className="text-xs text-foreground/45">View details</span>
                 </div>
               </div>
             </Link>

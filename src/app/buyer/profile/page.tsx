@@ -38,8 +38,12 @@ export default function ProfilePage() {
 
   useEffect(() => {
     fetch("/api/profile")
-      .then((r) => r.json())
-      .then((data: Profile) => {
+      .then((r) => {
+        if (!r.ok) return null;
+        return r.json();
+      })
+      .then((data: Profile | null) => {
+        if (!data) return;
         setProfile(data);
         setDisplayName(data.displayName ?? "");
         setBio(data.bio ?? "");

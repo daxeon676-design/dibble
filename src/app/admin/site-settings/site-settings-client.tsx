@@ -11,6 +11,7 @@ type Config = {
   platformFeePercent: number;
   supportEmail: string;
   allowNewSellerApplications: boolean;
+  maxActiveSellerAccounts: number;
 };
 
 export default function SiteSettingsClient() {
@@ -127,6 +128,20 @@ export default function SiteSettingsClient() {
           />
           Allow new seller applications
         </label>
+        <label className="block text-sm text-slate-700">
+          Maximum active seller accounts
+          <input
+            type="number"
+            min={1}
+            max={10000}
+            className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+            value={config.maxActiveSellerAccounts}
+            onChange={(e) => setConfig({ ...config, maxActiveSellerAccounts: Number(e.target.value || 1) })}
+          />
+        </label>
+        <p className="text-xs text-slate-500">
+          When the active seller count reaches this cap, new seller applications and approvals are blocked.
+        </p>
       </section>
 
       <section className="space-y-3">

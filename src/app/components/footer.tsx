@@ -60,6 +60,11 @@ export default async function Footer() {
                 Privacy Policy
               </Link>
             </li>
+            <li>
+              <Link href="/cookies" className="hover:text-(--accent-terra)">
+                Cookie Policy
+              </Link>
+            </li>
           </ul>
         </div>
 
@@ -67,8 +72,8 @@ export default async function Footer() {
           <p className="mb-3 font-semibold text-(--accent-terra)">Get in Touch</p>
           <ul className="space-y-2 text-sm text-foreground/80">
             <li>
-              <a href="mailto:hello@dibble.market" className="hover:text-(--accent-terra)">
-                hello@dibble.market
+              <a href={`mailto:${config.supportEmail}`} className="hover:text-(--accent-terra)">
+                {config.supportEmail}
               </a>
             </li>
             <li className="text-xs italic text-foreground/60">

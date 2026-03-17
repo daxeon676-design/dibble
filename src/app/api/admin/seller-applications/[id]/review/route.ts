@@ -5,6 +5,7 @@ import { z } from "zod";
 import { Role, SellerApplicationStatus } from "@/generated/prisma/enums";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getSiteConfig } from "@/lib/site-config";
 
 const reviewSchema = z.object({
   decision: z.enum(["APPROVE", "REJECT"]),
@@ -40,6 +41,17 @@ export async function PATCH(
   }
 
   const approved = parsed.data.decision === "APPROVE";
+
+  if (approved) {
+    const siteConfig = await getSiteConfig();
+    const activeSellerCount = await prisma.user.count({ where: { role: Role.SELLER } });
+    if (activeSellerCount >= siteConfig.maxActiveSellerAccounts) {
+      return NextResponse.json(
+        { error: "Cannot approve application: seller account limit reached." },
+        { status: 409 },
+      );
+    }
+  }
 
   const updated = await prisma.$transaction(async (tx) => {
     const application = await tx.sellerApplication.update({

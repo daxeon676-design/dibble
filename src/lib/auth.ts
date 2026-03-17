@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { Role, UserStatus } from "@/generated/prisma/enums";
 import { prisma } from "@/lib/prisma";
+import { clearLoginFailures, isLoginAllowed, recordLoginFailure } from "@/lib/auth-security";
 
 const credentialsSchema = z.object({
   email: z.email(),
@@ -31,15 +32,24 @@ export const authOptions: NextAuthOptions = {
         }
 
         const email = parsed.data.email.toLowerCase();
+
+        if (!isLoginAllowed(email)) {
+          return null;
+        }
+
         const user = await prisma.user.findUnique({ where: { email } });
         if (!user || user.status !== UserStatus.ACTIVE) {
+          recordLoginFailure(email);
           return null;
         }
 
         const validPassword = await bcrypt.compare(parsed.data.password, user.passwordHash);
         if (!validPassword) {
+          recordLoginFailure(email);
           return null;
         }
+
+        clearLoginFailures(email);
 
         return {
           id: user.id,
@@ -47,18 +57,31 @@ export const authOptions: NextAuthOptions = {
           name: user.displayName ?? user.email,
           role: user.role,
           status: user.status,
+          mfaEnabled: user.mfaEnabled,
           rememberMe: parsed.data.rememberMe === true || parsed.data.rememberMe === "true",
         };
       },
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger }) {
       if (user) {
         token.id = user.id;
         token.role = user.role as Role;
         token.status = user.status as UserStatus;
+        token.mfaEnabled = user.mfaEnabled;
         token.rememberMe = Boolean((user as { rememberMe?: boolean }).rememberMe);
+      }
+
+      // On explicit session update (e.g. after MFA setup), refresh mfaEnabled from DB.
+      if (trigger === "update" && token.id) {
+        const dbUser = await prisma.user.findUnique({
+          where: { id: token.id as string },
+          select: { mfaEnabled: true },
+        });
+        if (dbUser) {
+          token.mfaEnabled = dbUser.mfaEnabled;
+        }
       }
 
       // Short-lived session when remember me is not selected.
@@ -73,6 +96,7 @@ export const authOptions: NextAuthOptions = {
         session.user.id = token.id as string;
         session.user.role = token.role as Role;
         session.user.status = token.status as UserStatus;
+        session.user.mfaEnabled = Boolean(token.mfaEnabled);
       }
       return session;
     },

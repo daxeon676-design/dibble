@@ -1,5 +1,7 @@
 import { PaymentStatus } from "@/generated/prisma/enums";
 import { buildPaymentMutationPlan } from "@/lib/payment-state";
+import { calculateMarketplaceSplit, getSellerStripeAccountId, getSiteConfig } from "@/lib/site-config";
+import { upsertSellerPayout } from "@/lib/seller-payout-ledger";
 import { prisma } from "@/lib/prisma";
 
 type FinalizeStatus = "SUCCEEDED" | "FAILED";
@@ -9,10 +11,20 @@ export async function finalizeOrderPayment(
   paymentIntentId: string,
   status: FinalizeStatus,
 ) {
+  const config = status === "SUCCEEDED" ? await getSiteConfig() : null;
+
   return prisma.$transaction(async (tx) => {
     const order = await tx.order.findUnique({
       where: { id: orderId },
-      include: { payment: true },
+      include: {
+        payment: true,
+        items: {
+          select: {
+            productId: true,
+            quantity: true,
+          },
+        },
+      },
     });
 
     if (!order?.payment) {
@@ -24,6 +36,24 @@ export async function finalizeOrderPayment(
       order.status,
       status,
     );
+
+    const shouldRestockReservedItems =
+      status === "FAILED" &&
+      order.payment.status === PaymentStatus.PENDING &&
+      nextPaymentStatus === PaymentStatus.FAILED;
+
+    if (shouldRestockReservedItems) {
+      for (const item of order.items) {
+        await tx.product.update({
+          where: { id: item.productId },
+          data: {
+            stock: {
+              increment: item.quantity,
+            },
+          },
+        });
+      }
+    }
 
     const paymentPatch: {
       stripePaymentIntent?: string;
@@ -51,7 +81,35 @@ export async function finalizeOrderPayment(
         data: { status: nextOrderStatus },
       });
 
+      if (status === "SUCCEEDED") {
+        const split = calculateMarketplaceSplit(order.totalCents, config?.platformFeePercent ?? 0);
+        const hasConnectedAccount = Boolean(await getSellerStripeAccountId(order.sellerId));
+
+        await upsertSellerPayout({
+          orderId: order.id,
+          sellerId: order.sellerId,
+          grossCents: order.totalCents,
+          platformFeeCents: split.platformFeeCents,
+          sellerPayoutCents: split.sellerPayoutCents,
+          status: hasConnectedAccount ? "SPLIT_AT_CHARGE" : "PLATFORM_PENDING",
+        });
+      }
+
       return { updated: true, order: updatedOrder };
+    }
+
+    if (status === "SUCCEEDED") {
+      const split = calculateMarketplaceSplit(order.totalCents, config?.platformFeePercent ?? 0);
+      const hasConnectedAccount = Boolean(await getSellerStripeAccountId(order.sellerId));
+
+      await upsertSellerPayout({
+        orderId: order.id,
+        sellerId: order.sellerId,
+        grossCents: order.totalCents,
+        platformFeeCents: split.platformFeeCents,
+        sellerPayoutCents: split.sellerPayoutCents,
+        status: hasConnectedAccount ? "SPLIT_AT_CHARGE" : "PLATFORM_PENDING",
+      });
     }
 
     return { updated: Object.keys(paymentPatch).length > 0, order };

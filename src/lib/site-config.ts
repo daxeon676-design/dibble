@@ -16,6 +16,7 @@ export type SiteConfig = {
   platformFeePercent: number;
   supportEmail: string;
   allowNewSellerApplications: boolean;
+  maxActiveSellerAccounts: number;
 };
 
 type SellerDeliveryMap = Record<string, string[]>;
@@ -34,14 +35,43 @@ export type SellerShopProfile = {
   websiteUrl?: string;
 };
 
+export type SellerPayoutMethod = "STRIPE_CONNECT" | "BANK_TRANSFER" | "PAYPAL" | "MANUAL_REVIEW";
+
+export type SellerPayoutProfile = {
+  method?: SellerPayoutMethod;
+  payeeName?: string;
+  payoutEmail?: string;
+  bankName?: string;
+  bankAccountLast4?: string;
+  bankSortCodeLast2?: string;
+  paypalEmail?: string;
+  notes?: string;
+  adminNotes?: string;
+  updatedAt?: string;
+};
+
 type ProductMetaMap = Record<string, ProductMeta>;
 type SellerShopProfileMap = Record<string, SellerShopProfile>;
+type SellerStripeAccountMap = Record<string, string>;
+type SellerPayoutProfileMap = Record<string, SellerPayoutProfile>;
 
 const dataDir = path.join(process.cwd(), "data");
 const configPath = path.join(dataDir, "site-config.json");
 const sellerDeliveryPath = path.join(dataDir, "seller-delivery-options.json");
 const productMetaPath = path.join(dataDir, "product-meta.json");
 const sellerShopProfilesPath = path.join(dataDir, "seller-shop-profiles.json");
+const sellerStripeAccountsPath = path.join(dataDir, "seller-stripe-accounts.json");
+const sellerPayoutProfilesPath = path.join(dataDir, "seller-payout-profiles.json");
+
+export function calculateMarketplaceSplit(totalCents: number, platformFeePercent: number) {
+  const normalizedPercent = Number.isFinite(platformFeePercent) ? Math.max(0, platformFeePercent) : 0;
+  const platformFeeCents = Math.round(totalCents * (normalizedPercent / 100));
+  const sellerPayoutCents = Math.max(0, totalCents - platformFeeCents);
+  return {
+    platformFeeCents,
+    sellerPayoutCents,
+  };
+}
 
 async function readJsonFile<T>(filePath: string, fallback: T): Promise<T> {
   try {
@@ -85,6 +115,7 @@ export async function getSiteConfig(): Promise<SiteConfig> {
     platformFeePercent: 5,
     supportEmail: "support@dibble.local",
     allowNewSellerApplications: true,
+    maxActiveSellerAccounts: 250,
   };
 
   const stored = await readJsonFile<Partial<SiteConfig>>(configPath, defaults);
@@ -137,4 +168,39 @@ export async function setSellerShopProfile(sellerId: string, patch: SellerShopPr
   const profiles = await getSellerShopProfiles();
   profiles[sellerId] = { ...(profiles[sellerId] ?? {}), ...patch };
   await writeJsonFile(sellerShopProfilesPath, profiles);
+}
+
+export async function getSellerStripeAccountMap(): Promise<SellerStripeAccountMap> {
+  return readJsonFile<SellerStripeAccountMap>(sellerStripeAccountsPath, {});
+}
+
+export async function getSellerStripeAccountId(sellerId: string): Promise<string | null> {
+  const map = await getSellerStripeAccountMap();
+  const accountId = map[sellerId];
+  return accountId && accountId.startsWith("acct_") ? accountId : null;
+}
+
+export async function setSellerStripeAccountId(sellerId: string, accountId: string) {
+  const map = await getSellerStripeAccountMap();
+  map[sellerId] = accountId;
+  await writeJsonFile(sellerStripeAccountsPath, map);
+}
+
+export async function getSellerPayoutProfiles(): Promise<SellerPayoutProfileMap> {
+  return readJsonFile<SellerPayoutProfileMap>(sellerPayoutProfilesPath, {});
+}
+
+export async function getSellerPayoutProfile(sellerId: string): Promise<SellerPayoutProfile> {
+  const profiles = await getSellerPayoutProfiles();
+  return profiles[sellerId] ?? {};
+}
+
+export async function setSellerPayoutProfile(sellerId: string, patch: SellerPayoutProfile) {
+  const profiles = await getSellerPayoutProfiles();
+  profiles[sellerId] = {
+    ...(profiles[sellerId] ?? {}),
+    ...patch,
+    updatedAt: new Date().toISOString(),
+  };
+  await writeJsonFile(sellerPayoutProfilesPath, profiles);
 }

@@ -7,6 +7,7 @@ import { authOptions } from "@/lib/auth";
 import { getRequestId, logApiEvent } from "@/lib/observability";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { calculateMarketplaceSplit, getSellerStripeAccountId, getSiteConfig } from "@/lib/site-config";
 import { stripe } from "@/lib/stripe";
 
 const createIntentSchema = z.object({
@@ -89,6 +90,11 @@ export async function POST(request: Request) {
   let intentId = order.payment.stripePaymentIntent;
 
   if (!intentId) {
+    const config = await getSiteConfig();
+    const split = calculateMarketplaceSplit(order.totalCents, config.platformFeePercent);
+    const sellerStripeAccountId = await getSellerStripeAccountId(order.sellerId);
+    const payoutMode = sellerStripeAccountId ? "destination_charge" : "platform_only";
+
     const intent = await stripe.paymentIntents.create({
       amount: order.totalCents,
       currency: "gbp",
@@ -96,7 +102,20 @@ export async function POST(request: Request) {
         orderId: order.id,
         buyerId: order.buyerId,
         sellerId: order.sellerId,
+        platformFeeCents: String(split.platformFeeCents),
+        sellerPayoutCents: String(split.sellerPayoutCents),
+        platformFeePercent: String(config.platformFeePercent),
+        payoutMode,
       },
+      ...(sellerStripeAccountId
+        ? {
+            application_fee_amount: split.platformFeeCents,
+            transfer_data: {
+              destination: sellerStripeAccountId,
+            },
+            transfer_group: `order_${order.id}`,
+          }
+        : {}),
       automatic_payment_methods: {
         enabled: true,
       },
@@ -117,9 +136,18 @@ export async function POST(request: Request) {
       userId: session.user.id,
       orderId: order.id,
       paymentIntentId: intent.id,
+      payoutMode,
     });
 
-    return NextResponse.json({ clientSecret: intent.client_secret, paymentIntentId: intent.id });
+    return NextResponse.json({
+      clientSecret: intent.client_secret,
+      paymentIntentId: intent.id,
+      commission: {
+        platformFeeCents: split.platformFeeCents,
+        sellerPayoutCents: split.sellerPayoutCents,
+      },
+      payoutMode,
+    });
   }
 
   const intent = await stripe.paymentIntents.retrieve(intentId);

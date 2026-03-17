@@ -4,7 +4,10 @@ import { z } from "zod";
 
 import { WebhookEventStatus } from "@/generated/prisma/enums";
 import { authOptions } from "@/lib/auth";
+import { evaluateOpsAlerts, getOpsAlertThresholds } from "@/lib/ops-alerts";
 import { prisma } from "@/lib/prisma";
+import { getSellerStripeAccountId } from "@/lib/site-config";
+import { listSellerPayouts } from "@/lib/seller-payout-ledger";
 
 const querySchema = z.object({
   hours: z.coerce.number().int().min(1).max(168).default(24),
@@ -38,6 +41,7 @@ export async function GET(request: Request) {
     stalePendingOrders,
     pendingPaymentOrders,
     recentWebhookFailures,
+    payouts,
   ] = await Promise.all([
     prisma.stripeWebhookEvent.count({ where: { createdAt: { gte: since } } }),
     prisma.stripeWebhookEvent.count({
@@ -81,9 +85,39 @@ export async function GET(request: Request) {
         updatedAt: true,
       },
     }),
+    listSellerPayouts(),
   ]);
 
+  const pendingPayouts = payouts.filter((entry) => entry.status === "PLATFORM_PENDING");
+  const pendingPayoutTotalCents = pendingPayouts.reduce((sum, entry) => sum + entry.sellerPayoutCents, 0);
+  const completedPayoutTotalCents = payouts
+    .filter((entry) => entry.status !== "PLATFORM_PENDING")
+    .reduce((sum, entry) => sum + entry.sellerPayoutCents, 0);
+
+  const pendingWithoutConnect = (
+    await Promise.all(
+      pendingPayouts.map(async (entry) => {
+        const account = await getSellerStripeAccountId(entry.sellerId);
+        return account ? 0 : 1;
+      }),
+    )
+  ).reduce<number>((sum, value) => sum + value, 0);
+
   const paymentFailureRate = paymentFailed / Math.max(paymentSucceeded, 1);
+  const thresholds = getOpsAlertThresholds();
+  const evaluatedAlerts = evaluateOpsAlerts(
+    {
+      paymentFailed,
+      paymentSucceeded,
+      webhookFailed,
+      webhookStaleProcessing,
+      stalePendingOrders,
+      pendingPayoutCount: pendingPayouts.length,
+      pendingPayoutTotalCents,
+      pendingWithoutConnect,
+    },
+    thresholds,
+  );
 
   return NextResponse.json({
     windowHours: hours,
@@ -104,6 +138,17 @@ export async function GET(request: Request) {
     orders: {
       pendingPayment: pendingPaymentOrders,
       stalePendingPayment: stalePendingOrders,
+    },
+    payouts: {
+      pendingCount: pendingPayouts.length,
+      pendingTotalCents: pendingPayoutTotalCents,
+      completedTotalCents: completedPayoutTotalCents,
+      pendingWithoutConnect,
+    },
+    alerts: {
+      highestSeverity: evaluatedAlerts.highestSeverity,
+      items: evaluatedAlerts.alerts,
+      thresholds,
     },
     recentWebhookFailures,
   });

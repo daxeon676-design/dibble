@@ -42,6 +42,7 @@ Use this as the execution checklist for each release candidate and final launch.
 - [ ] Buyer can complete checkout and create order.
 - [ ] Successful payment moves order to `PROCESSING`.
 - [ ] Seller/admin can progress status with valid transitions only.
+- [ ] Payout UAT sign-off completed (`docs/payout-uat-signoff.md`).
 
 ### Messaging, Disputes, Notifications
 
@@ -62,10 +63,22 @@ Use this as the execution checklist for each release candidate and final launch.
 - [ ] Stripe webhook replay drill completed (staging) and verified idempotent behavior.
 - [ ] Stale `PROCESSING` recovery drill completed (staging) and verified metric returns to `0`.
 - [ ] SQL verification queries from `docs/MONITORING.md` tested by on-call.
+- [ ] Launch-day owner checklist completed (`docs/launch-day-owner-checklist.md`).
+
+## 5b. Security Hardening
+
+- [ ] HTTP security headers validated in production responses (HSTS, frame deny, nosniff, referrer policy, permissions policy).
+- [ ] Login brute-force protection tested (repeat invalid logins are throttled/blocked).
+- [ ] Sensitive admin/seller endpoints are rate limited and return `429` with `Retry-After` when exceeded.
+- [ ] Dependency audit completed (`npm audit`) and critical vulnerabilities remediated or accepted with documented risk.
+- [ ] Security logging path validated for suspicious auth activity and admin actions.
+- [ ] Admin account MFA verified and recovery procedure documented.
+- [ ] Production cookies and auth settings verified over HTTPS only.
 
 ## 6. Legal and Policy
 
 - [ ] Terms and Privacy content reviewed for launch jurisdiction.
+- [ ] Cookie consent flow reviewed for PECR/UK GDPR and validated in production.
 - [ ] Refund/dispute process wording finalized.
 - [ ] Support contact details are correct in UI/footer.
 

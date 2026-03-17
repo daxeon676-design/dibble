@@ -20,6 +20,7 @@ const siteConfigSchema = z.object({
   platformFeePercent: z.number().min(0).max(100),
   supportEmail: z.string().email(),
   allowNewSellerApplications: z.boolean(),
+  maxActiveSellerAccounts: z.number().int().min(1).max(10000),
 });
 
 export async function GET() {

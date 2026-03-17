@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getSiteConfig } from "@/lib/site-config";
+import { calculateMarketplaceSplit, getSiteConfig } from "@/lib/site-config";
 
 export default async function AdminAnalyticsPage() {
   const session = await getServerSession(authOptions);
@@ -23,7 +23,8 @@ export default async function AdminAnalyticsPage() {
   ]);
 
   const grossRevenueCents = paidRevenue._sum.totalCents ?? 0;
-  const estimatedPlatformFeesCents = Math.round(grossRevenueCents * (config.platformFeePercent / 100));
+  const { platformFeeCents: estimatedPlatformFeesCents, sellerPayoutCents: estimatedSellerPayoutCents } =
+    calculateMarketplaceSplit(grossRevenueCents, config.platformFeePercent);
 
   return (
     <main className="mx-auto min-h-screen max-w-6xl px-6 py-12 text-foreground">
@@ -69,6 +70,24 @@ export default async function AdminAnalyticsPage() {
           <p className="mt-3 text-3xl font-semibold">£{(estimatedPlatformFeesCents / 100).toFixed(2)}</p>
           <p className="mt-2 text-sm text-foreground/60">
             Calculated at {config.platformFeePercent.toFixed(2)}% of paid order value.
+          </p>
+        </article>
+      </section>
+
+      <section className="mt-4 grid gap-4 md:grid-cols-2">
+        <article className="rounded-xl border border-(--accent-terra)/25 bg-white p-5">
+          <h2 className="text-lg font-semibold text-(--accent-terra)">Estimated Seller Payouts</h2>
+          <p className="mt-3 text-3xl font-semibold">£{(estimatedSellerPayoutCents / 100).toFixed(2)}</p>
+          <p className="mt-2 text-sm text-foreground/60">
+            Paid order value after platform fee (before Stripe processing fees).
+          </p>
+        </article>
+
+        <article className="rounded-xl border border-(--accent-terra)/25 bg-white p-5">
+          <h2 className="text-lg font-semibold text-(--accent-terra)">Payout Mode</h2>
+          <p className="mt-3 text-sm text-foreground/80">
+            If a seller has a Stripe Connect account configured, payments can split at charge time.
+            Otherwise funds settle in the platform account first and sellers are paid out later.
           </p>
         </article>
       </section>

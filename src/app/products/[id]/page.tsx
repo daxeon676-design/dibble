@@ -119,9 +119,20 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
               </Link>
             </div>
             <p className="mt-3 text-3xl font-semibold text-foreground">£{(product.priceCents / 100).toFixed(2)}</p>
-            <p className="mt-2 text-sm text-foreground/70">
-              {reviewAverage ? `${reviewAverage.toFixed(1)} / 5 from ${reviews.length} review${reviews.length === 1 ? "" : "s"}` : "No reviews yet"}
-            </p>
+            <div className="mt-2 flex items-center gap-2">
+              {reviewAverage ? (
+                <>
+                  <span className="text-base tracking-tight text-amber-400">
+                    {"★".repeat(Math.round(reviewAverage))}{"☆".repeat(5 - Math.round(reviewAverage))}
+                  </span>
+                  <span className="text-sm text-foreground/70">
+                    {reviewAverage.toFixed(1)} · {reviews.length} review{reviews.length === 1 ? "" : "s"}
+                  </span>
+                </>
+              ) : (
+                <span className="text-sm text-foreground/50">No reviews yet</span>
+              )}
+            </div>
           </div>
 
           <p className="text-base leading-7 text-foreground/80">{product.description}</p>
@@ -177,15 +188,17 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
             {reviews.length === 0 ? <p className="text-sm text-foreground/60">No reviews yet.</p> : null}
             {reviews.map((review) => (
               <article key={review.id} className="rounded-xl border border-(--accent-terra)/25 bg-white p-4">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="font-medium text-foreground">{review.buyer.displayName ?? review.buyer.email}</p>
-                  <p className="text-sm text-foreground/60">{review.rating} / 5</p>
-                </div>
-                <p className="mt-1 text-xs text-foreground/50">
-                  {new Date(review.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}
-                </p>
-                <p className="mt-3 text-sm leading-6 text-foreground/80">{review.body}</p>
-              </article>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="font-medium text-foreground">{review.buyer.displayName ?? review.buyer.email}</p>
+                    <span className="text-sm tracking-tight text-amber-400">
+                      {"★".repeat(review.rating)}{"☆".repeat(5 - review.rating)}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-foreground/50">
+                    {new Date(review.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}
+                  </p>
+                  <p className="mt-3 text-sm leading-6 text-foreground/80">{review.body}</p>
+                </article>
             ))}
           </div>
         </div>

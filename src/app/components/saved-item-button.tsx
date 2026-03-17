@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type ListType = "wishlist" | "favourite-products" | "favourite-shops";
 
@@ -60,7 +60,13 @@ export function SavedItemButton({
   loginRedirectPath?: string;
 }) {
   const key = STORAGE_KEYS[listType];
-  const [saved, setSaved] = useState(() => readList(key).some((entry) => entry.id === item.id));
+  const [saved, setSaved] = useState(false);
+
+   
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSaved(readList(key).some((entry) => entry.id === item.id));
+  }, [key, item.id]);
 
   function toggle() {
     if (requireAuth) {

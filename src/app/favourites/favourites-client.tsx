@@ -1,13 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type SavedItem = { id: string; label: string; href: string };
 
 function readItems(key: string): SavedItem[] {
   try {
-    const raw = window.localStorage.getItem(key);
+    const raw = localStorage.getItem(key);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as SavedItem[];
     return Array.isArray(parsed) ? parsed : [];
@@ -40,8 +40,26 @@ function ItemList({ title, items }: { title: string; items: SavedItem[] }) {
 }
 
 export default function FavouritesClient() {
-  const [products] = useState<SavedItem[]>(() => readItems("dibble:favourite-products"));
-  const [shops] = useState<SavedItem[]>(() => readItems("dibble:favourite-shops"));
+  const [products, setProducts] = useState<SavedItem[]>([]);
+  const [shops, setShops] = useState<SavedItem[]>([]);
+  const [mounted, setMounted] = useState(false);
+
+   
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setProducts(readItems("dibble:favourite-products"));
+     
+    setShops(readItems("dibble:favourite-shops"));
+     
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
+    return <div className="space-y-6 animate-pulse">
+      <div className="h-8 w-40 rounded bg-(--accent-beige)" />
+      <div className="h-12 rounded border border-(--accent-terra)/30 bg-(--accent-beige)/40" />
+    </div>;
+  }
 
   return (
     <div className="space-y-6">

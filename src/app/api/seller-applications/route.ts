@@ -5,6 +5,8 @@ import { z } from "zod";
 import { Role, SellerApplicationStatus } from "@/generated/prisma/enums";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getSiteConfig } from "@/lib/site-config";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 const createApplicationSchema = z.object({
   shopName: z.string().trim().min(3).max(80),
@@ -30,13 +32,38 @@ export async function GET() {
     },
   });
 
-  return NextResponse.json({ application });
+  const siteConfig = await getSiteConfig();
+  const activeSellerCount = await prisma.user.count({ where: { role: Role.SELLER } });
+
+  return NextResponse.json({
+    application,
+    applicationConfig: {
+      allowNewSellerApplications: siteConfig.allowNewSellerApplications,
+      maxActiveSellerAccounts: siteConfig.maxActiveSellerAccounts,
+      activeSellerCount,
+      capacityReached: activeSellerCount >= siteConfig.maxActiveSellerAccounts,
+    },
+  });
 }
 
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const rateLimit = checkRateLimit(request, {
+    scope: "seller-application-submit",
+    limit: 5,
+    windowMs: 15 * 60 * 1000,
+    key: session.user.id,
+  });
+
+  if (!rateLimit.ok) {
+    return NextResponse.json(
+      { error: "Too many application attempts. Please wait and try again." },
+      { status: 429, headers: { "Retry-After": String(rateLimit.retryAfterSeconds) } },
+    );
   }
 
   if (session.user.role !== Role.BUYER) {
@@ -56,6 +83,19 @@ export async function POST(request: Request) {
   const existing = await prisma.sellerApplication.findUnique({ where: { userId: session.user.id } });
   if (existing) {
     return NextResponse.json({ error: "You already submitted a seller application." }, { status: 409 });
+  }
+
+  const siteConfig = await getSiteConfig();
+  if (!siteConfig.allowNewSellerApplications) {
+    return NextResponse.json({ error: "Seller applications are currently paused." }, { status: 409 });
+  }
+
+  const activeSellerCount = await prisma.user.count({ where: { role: Role.SELLER } });
+  if (activeSellerCount >= siteConfig.maxActiveSellerAccounts) {
+    return NextResponse.json(
+      { error: "Seller capacity reached. Applications are temporarily closed." },
+      { status: 409 },
+    );
   }
 
   try {

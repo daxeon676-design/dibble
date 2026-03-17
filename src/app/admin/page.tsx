@@ -2,9 +2,12 @@ import { getServerSession } from "next-auth";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { OrderStatus, PaymentStatus, Role, SellerApplicationStatus } from "@/generated/prisma/enums";
+import { DisputeStatus, OrderStatus, PaymentStatus, Role, SellerApplicationStatus } from "@/generated/prisma/enums";
 import { authOptions } from "@/lib/auth";
+import { getLaunchReadiness } from "@/lib/launch-readiness";
 import { prisma } from "@/lib/prisma";
+import { getSystemHealth } from "@/lib/system-health";
+import { getSiteConfig } from "@/lib/site-config";
 import { ReviewActions } from "@/app/admin/review-actions";
 import { DeleteReviewButton } from "@/app/admin/delete-review-button";
 
@@ -27,6 +30,7 @@ export default async function AdminDashboardPage() {
     totalProducts,
     totalOrders,
     orderInFlight,
+    openSupportDisputes,
     paymentsAgg,
     topSellerPayments,
     recentReviews,
@@ -52,6 +56,13 @@ export default async function AdminDashboardPage() {
       where: {
         status: {
           in: [OrderStatus.PENDING_PAYMENT, OrderStatus.PROCESSING, OrderStatus.SHIPPED],
+        },
+      },
+    }),
+    prisma.dispute.count({
+      where: {
+        status: {
+          in: [DisputeStatus.OPEN, DisputeStatus.UNDER_REVIEW],
         },
       },
     }),
@@ -126,6 +137,16 @@ export default async function AdminDashboardPage() {
     .sort((a, b) => b.amountCents - a.amountCents)
     .slice(0, 5);
 
+  const [systemHealth, launchReadiness, siteConfig] = await Promise.all([
+    getSystemHealth(),
+    getLaunchReadiness(),
+    getSiteConfig(),
+  ]);
+
+  const sellerCapacityPercent = siteConfig.maxActiveSellerAccounts > 0
+    ? Math.round((totalSellers / siteConfig.maxActiveSellerAccounts) * 100)
+    : 0;
+
   return (
     <main className="mx-auto min-h-screen max-w-6xl px-6 py-16 text-slate-100">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -134,11 +155,29 @@ export default async function AdminDashboardPage() {
           <Link href="/admin/site-settings" className="rounded-md border border-slate-700 px-3 py-2 text-sm">
             Site Settings
           </Link>
+          <Link href="/admin/legal-pages" className="rounded-md border border-slate-700 px-3 py-2 text-sm">
+            Legal Pages
+          </Link>
+          <Link href="/admin/payouts" className="rounded-md border border-slate-700 px-3 py-2 text-sm">
+            Payout Queue
+          </Link>
+          <Link href="/admin/payout-profiles" className="rounded-md border border-slate-700 px-3 py-2 text-sm">
+            Payout Profiles
+          </Link>
           <Link href="/admin/ops" className="rounded-md border border-slate-700 px-3 py-2 text-sm">
             Ops Dashboard
           </Link>
+          <Link href="/admin/launch-config" className="rounded-md border border-slate-700 px-3 py-2 text-sm">
+            Launch Config
+          </Link>
           <Link href="/admin/disputes" className="rounded-md border border-slate-700 px-3 py-2 text-sm">
             Disputes
+          </Link>
+          <Link href="/admin/users-support" className="rounded-md border border-slate-700 px-3 py-2 text-sm">
+            Users &amp; Support
+          </Link>
+          <Link href="/admin/security" className="rounded-md border border-slate-700 px-3 py-2 text-sm">
+            Security &amp; Audit
           </Link>
           <Link href="/admin/orders" className="rounded-md border border-slate-700 px-3 py-2 text-sm">
             Manage All Orders
@@ -167,6 +206,58 @@ export default async function AdminDashboardPage() {
           <p className="text-xs uppercase tracking-wide text-slate-400">Catalog</p>
           <p className="mt-2 text-2xl font-semibold">{totalProducts}</p>
           <p className="mt-1 text-xs text-slate-400">Pending applications: {pendingApplications.length}</p>
+        </article>
+      </section>
+
+      <section className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <article className="rounded-md border border-slate-800 bg-slate-900 p-4">
+          <p className="text-xs uppercase tracking-wide text-slate-400">System Health</p>
+          <p className={`mt-2 text-xl font-semibold ${systemHealth.ok ? "text-emerald-300" : "text-red-300"}`}>
+            {systemHealth.ok ? "Healthy" : "Degraded"}
+          </p>
+          <p className="mt-1 text-xs text-slate-400">Database: {systemHealth.services.database.ok ? "OK" : "Fail"}</p>
+        </article>
+        <article className="rounded-md border border-slate-800 bg-slate-900 p-4">
+          <p className="text-xs uppercase tracking-wide text-slate-400">Launch Gate</p>
+          <p className={`mt-2 text-xl font-semibold ${launchReadiness.readyToLaunch ? "text-emerald-300" : "text-amber-300"}`}>
+            {launchReadiness.readyToLaunch ? "Ready to Launch" : "Not Ready"}
+          </p>
+          <p className="mt-1 text-xs text-slate-400">
+            Passing checks: {launchReadiness.checks.filter((check) => check.passed).length}/{launchReadiness.checks.length}
+          </p>
+          <div className="mt-2">
+            <Link href="/admin/ops" className="text-xs text-emerald-300 hover:underline">
+              View full readiness details in Ops
+            </Link>
+          </div>
+        </article>
+        <article className="rounded-md border border-slate-800 bg-slate-900 p-4">
+          <p className="text-xs uppercase tracking-wide text-slate-400">Seller Capacity</p>
+          <p className="mt-2 text-xl font-semibold text-amber-200">
+            {totalSellers}/{siteConfig.maxActiveSellerAccounts}
+          </p>
+          <p className="mt-1 text-xs text-slate-400">
+            {sellerCapacityPercent}% in use. {siteConfig.allowNewSellerApplications ? "Applications open" : "Applications paused"}.
+          </p>
+          <div className="mt-2">
+            <Link href="/admin/site-settings" className="text-xs text-emerald-300 hover:underline">
+              Update seller limit
+            </Link>
+          </div>
+        </article>
+        <article className="rounded-md border border-slate-800 bg-slate-900 p-4">
+          <p className="text-xs uppercase tracking-wide text-slate-400">Support Workload</p>
+          <p className="mt-2 text-xl font-semibold text-sky-200">
+            {openSupportDisputes} open dispute{openSupportDisputes === 1 ? "" : "s"}
+          </p>
+          <p className="mt-1 text-xs text-slate-400">
+            Pending seller applications: {pendingApplications.length}
+          </p>
+          <div className="mt-2">
+            <Link href="/admin/disputes" className="text-xs text-emerald-300 hover:underline">
+              Review support queues
+            </Link>
+          </div>
         </article>
       </section>
 

@@ -1,6 +1,14 @@
 "use client";
 
+import { useEffect } from "react";
 import { FormEvent, useState } from "react";
+
+type ApplicationConfig = {
+  allowNewSellerApplications: boolean;
+  maxActiveSellerAccounts: number;
+  activeSellerCount: number;
+  capacityReached: boolean;
+};
 
 export default function SellerApplicationPage() {
   const [shopName, setShopName] = useState("");
@@ -8,6 +16,25 @@ export default function SellerApplicationPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [applicationConfig, setApplicationConfig] = useState<ApplicationConfig | null>(null);
+
+  useEffect(() => {
+    fetch("/api/seller-applications")
+      .then((res) => res.json())
+      .then((data: { applicationConfig?: ApplicationConfig }) => {
+        if (data.applicationConfig) {
+          setApplicationConfig(data.applicationConfig);
+        }
+      })
+      .catch(() => {
+        setApplicationConfig(null);
+      });
+  }, []);
+
+  const submissionsOpen =
+    applicationConfig
+      ? applicationConfig.allowNewSellerApplications && !applicationConfig.capacityReached
+      : true;
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -38,6 +65,19 @@ export default function SellerApplicationPage() {
     <main className="mx-auto min-h-screen max-w-3xl px-6 py-16 text-foreground">
       <h1 className="text-3xl font-semibold">Apply to Become a Seller</h1>
       <p className="mt-2 text-sm text-foreground/70">Tell us about your shop and what you make.</p>
+
+      {applicationConfig ? (
+        <div className="mt-4 rounded-md border border-slate-300 bg-slate-50 p-3 text-sm text-slate-700">
+          <p>
+            Active seller accounts: {applicationConfig.activeSellerCount}/{applicationConfig.maxActiveSellerAccounts}
+          </p>
+          {!submissionsOpen ? (
+            <p className="mt-1 text-amber-700">
+              New seller applications are currently unavailable.
+            </p>
+          ) : null}
+        </div>
+      ) : null}
 
       <form onSubmit={onSubmit} className="mt-8 space-y-4 rounded-lg border border-(--accent-terra) bg-(--accent-beige) p-6">
         <label className="block text-sm">
@@ -70,7 +110,7 @@ export default function SellerApplicationPage() {
 
         <button
           type="submit"
-          disabled={loading}
+          disabled={loading || !submissionsOpen}
           className="rounded-md bg-(--accent-terra) px-4 py-2 font-semibold text-(--accent-beige) disabled:opacity-60"
         >
           {loading ? "Submitting..." : "Submit Application"}

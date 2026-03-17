@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { OrderStatus, PaymentStatus, ProductStatus, Role } from "@/generated/prisma/enums";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { SellerPayoutsPanel } from "@/app/seller/seller-payouts-panel";
 
 export default async function SellerDashboardPage() {
   const session = await getServerSession(authOptions);
@@ -114,6 +115,8 @@ export default async function SellerDashboardPage() {
           ))}
         </div>
       </section>
+
+      <SellerPayoutsPanel />
 
       <div className="mt-8 flex flex-wrap gap-3">
         <Link href="/seller/products" className="rounded-md bg-emerald-500 px-4 py-2 font-semibold text-slate-950">
