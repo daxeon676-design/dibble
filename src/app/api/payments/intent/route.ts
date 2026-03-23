@@ -116,9 +116,7 @@ export async function POST(request: Request) {
             transfer_group: `order_${order.id}`,
           }
         : {}),
-      automatic_payment_methods: {
-        enabled: true,
-      },
+      payment_method_types: ["card"],
     });
 
     intentId = intent.id;

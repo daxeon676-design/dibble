@@ -2,10 +2,10 @@
 
 :root {
   --background: #ffffff;
-  --foreground: #0f172a;
-  --accent-terra: #d36e2f; /* terracotta orange */
-  --accent-beige: #e9d8c3;
-  --accent-green: #a3a847;
+  --foreground: #102819;
+  --accent-terra: #0e5222; /* deep green brand primary */
+  --accent-beige: #e8f4ec;
+  --accent-green: #2f8a46;
 }
 
 @theme inline {
@@ -18,10 +18,10 @@
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #ffffff;
-    --foreground: #0f172a;
-    --accent-terra: #d36e2f;
-    --accent-beige: #e9d8c3;
-    --accent-green: #a3a847;
+    --foreground: #102819;
+    --accent-terra: #0e5222;
+    --accent-beige: #e8f4ec;
+    --accent-green: #2f8a46;
   }
 }
 
@@ -49,4 +49,31 @@ body {
 .border-slate-700,
 .border-slate-800 {
   border-color: #cbd5e1 !important;
+}
+
+/* Align legacy emerald/indigo utility usage with the green brand palette. */
+.bg-emerald-500,
+.bg-emerald-600,
+.bg-indigo-600,
+.bg-indigo-700 {
+  background-color: var(--accent-terra) !important;
+}
+
+.hover\:bg-emerald-500:hover,
+.hover\:bg-emerald-600:hover,
+.hover\:bg-indigo-700:hover {
+  background-color: #0b431c !important;
+}
+
+.text-emerald-300,
+.text-emerald-400,
+.text-emerald-600 {
+  color: var(--accent-green) !important;
+}
+
+.border-emerald-600,
+.border-emerald-700,
+.border-indigo-600,
+.border-indigo-700 {
+  border-color: var(--accent-terra) !important;
 }

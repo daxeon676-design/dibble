@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { ProductStatus, Role } from "@/generated/prisma/enums";
 import { authOptions } from "@/lib/auth";
+import { logApiEvent } from "@/lib/observability";
 import { prisma } from "@/lib/prisma";
 import { getProductMetaMap, setProductMeta } from "@/lib/site-config";
 
@@ -99,30 +100,38 @@ export async function POST(request: Request) {
     },
   });
 
-  await setProductMeta(product.id, {
-    category: parsed.data.category,
-    materials: parsed.data.materials,
-    dimensions: parsed.data.dimensions,
-  });
+  try {
+    await setProductMeta(product.id, {
+      category: parsed.data.category,
+      materials: parsed.data.materials,
+      dimensions: parsed.data.dimensions,
+    });
 
-  // Notify followers that a new product was published.
-  const followers = await prisma.sellerFollow.findMany({
-    where: { sellerId: session.user.id },
-    select: { buyerId: true },
-  });
+    // Notify followers that a new product was published.
+    const followers = await prisma.sellerFollow.findMany({
+      where: { sellerId: session.user.id },
+      select: { buyerId: true },
+    });
 
-  if (followers.length > 0) {
-    const sellerLabel = session.user.name ?? session.user.email ?? "A seller you follow";
-    await prisma.notification.createMany({
-      data: followers.map((follower) => ({
-        userId: follower.buyerId,
-        type: "NEW_PRODUCT",
-        title: "New product from a followed shop",
-        body: `${sellerLabel} listed \"${product.title}\"`,
-        href: `/products/${product.id}`,
-        productId: product.id,
-        actorUserId: session.user.id,
-      })),
+    if (followers.length > 0) {
+      const sellerLabel = session.user.name ?? session.user.email ?? "A seller you follow";
+      await prisma.notification.createMany({
+        data: followers.map((follower) => ({
+          userId: follower.buyerId,
+          type: "NEW_PRODUCT",
+          title: "New product from a followed shop",
+          body: `${sellerLabel} listed \"${product.title}\"`,
+          href: `/products/${product.id}`,
+          productId: product.id,
+          actorUserId: session.user.id,
+        })),
+      });
+    }
+  } catch (error) {
+    logApiEvent("warn", "products.post.post_create_side_effect_failed", {
+      productId: product.id,
+      sellerId: session.user.id,
+      error: error instanceof Error ? error.message : String(error),
     });
   }
 

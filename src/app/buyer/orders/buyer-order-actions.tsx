@@ -7,7 +7,7 @@ import {
   useStripe,
 } from "@stripe/react-stripe-js";
 import { loadStripe } from "@stripe/stripe-js";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useState } from "react";
 
 type Props = {
   orderId: string;
@@ -81,7 +81,7 @@ function ConfirmPaymentForm({ orderId, onSuccess }: ConfirmPaymentFormProps) {
       <button
         type="submit"
         disabled={state === "loading" || !stripe || !elements}
-        className="rounded-md bg-emerald-500 px-3 py-1 text-sm font-semibold text-slate-950 disabled:opacity-60"
+        className="rounded-md bg-(--accent-terra) px-3 py-1 text-sm font-semibold text-(--accent-beige) hover:opacity-90 disabled:opacity-60"
       >
         {state === "loading" ? "Processing..." : "Pay Now"}
       </button>
@@ -95,11 +95,7 @@ export function BuyerOrderActions({ orderId, canPay }: Props) {
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  if (!canPay) {
-    return null;
-  }
-
-  async function payNow() {
+  const initializePayment = useCallback(async () => {
     if (!stripePromise) {
       const response = await fetch("/api/payments/confirm", {
         method: "POST",
@@ -138,6 +134,24 @@ export function BuyerOrderActions({ orderId, canPay }: Props) {
 
     setClientSecret(intentBody.clientSecret);
     setState("ready");
+  }, [orderId]);
+
+  useEffect(() => {
+    if (!canPay || state !== "idle") {
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      void initializePayment();
+    }, 0);
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [canPay, initializePayment, state]);
+
+  if (!canPay) {
+    return null;
   }
 
   function onPaymentSuccess() {
@@ -146,26 +160,34 @@ export function BuyerOrderActions({ orderId, canPay }: Props) {
 
   return (
     <div className="mt-3">
-      <button
-        type="button"
-        onClick={payNow}
-        disabled={state === "loading" || state === "ready"}
-        className="rounded-md bg-emerald-500 px-3 py-1 text-sm font-semibold text-slate-950 disabled:opacity-60"
-      >
-        {state === "loading"
-          ? "Initializing..."
-          : stripePromise
-            ? "Pay with Card"
-            : "Pay Now (Test)"}
-      </button>
+      {state === "loading" ? (
+        <span className="text-xs text-foreground/70">Loading secure payment options...</span>
+      ) : null}
 
       {state === "ready" && clientSecret && stripePromise ? (
         <Elements stripe={stripePromise} options={{ clientSecret }}>
+          <p className="mb-2 text-xs text-foreground/70">
+            Apple Pay or Google Pay will appear automatically on supported devices/browsers.
+          </p>
           <ConfirmPaymentForm orderId={orderId} onSuccess={onPaymentSuccess} />
         </Elements>
       ) : null}
 
-      {state === "error" ? <span className="ml-3 text-xs text-red-300">{error ?? "Payment failed"}</span> : null}
+      {state === "error" ? (
+        <div className="mt-2 space-y-2">
+          <span className="block text-xs text-red-300">{error ?? "Payment failed"}</span>
+          <button
+            type="button"
+            onClick={() => {
+              setState("idle");
+              setError(null);
+            }}
+            className="rounded-md border border-foreground/20 px-2 py-1 text-xs text-foreground/80"
+          >
+            Try again
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }

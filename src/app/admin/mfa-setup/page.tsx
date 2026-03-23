@@ -77,9 +77,15 @@ export default function AdminMfaSetupPage() {
       }
 
       // Refresh JWT so mfaEnabled becomes true and middleware lets the admin through.
-      await update();
+      await update({ mfaEnabled: true });
       setState("done");
-      router.push("/admin");
+      router.replace("/admin");
+      router.refresh();
+
+      // Some environments apply the refreshed session cookie on the next tick.
+      setTimeout(() => {
+        window.location.assign("/admin");
+      }, 250);
     } catch {
       setErrorMsg("Network error. Please try again.");
       setState("ready");
@@ -87,16 +93,16 @@ export default function AdminMfaSetupPage() {
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
+    <main className="min-h-screen flex items-center justify-center bg-(--accent-beige)/40 p-6">
       <div className="bg-white rounded-2xl shadow-lg p-8 w-full max-w-md">
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">Set up two-factor authentication</h1>
-        <p className="text-sm text-gray-500 mb-6">
+        <h1 className="text-2xl font-bold text-(--accent-terra) mb-2">Set up two-factor authentication</h1>
+        <p className="text-sm text-foreground/70 mb-6">
           Scan the QR code with an authenticator app (Google Authenticator, Authy, 1Password…), then
           enter the 6-digit code to confirm.
         </p>
 
         {state === "loading" && (
-          <p className="text-center text-gray-400 py-8">Generating QR code…</p>
+          <p className="text-center text-foreground/60 py-8">Generating QR code...</p>
         )}
 
         {state === "error" && (
@@ -113,17 +119,17 @@ export default function AdminMfaSetupPage() {
             </div>
 
             <details className="mb-6">
-              <summary className="text-xs text-gray-400 cursor-pointer select-none">
+              <summary className="text-xs text-foreground/60 cursor-pointer select-none">
                 Can&apos;t scan? Enter the code manually
               </summary>
-              <p className="mt-2 font-mono text-xs break-all bg-gray-100 rounded p-2 select-all">
+              <p className="mt-2 font-mono text-xs break-all bg-(--accent-beige) rounded p-2 select-all">
                 {secret}
               </p>
             </details>
 
             <form onSubmit={handleVerify} className="space-y-4">
               <div>
-                <label htmlFor="mfa-code" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="mfa-code" className="block text-sm font-medium text-foreground mb-1">
                   Verification code
                 </label>
                 <input
@@ -138,7 +144,7 @@ export default function AdminMfaSetupPage() {
                   onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
                   placeholder="000000"
                   required
-                  className="w-full border border-gray-300 rounded-lg px-4 py-2 text-center tracking-widest text-xl font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full border border-(--accent-terra)/40 rounded-lg px-4 py-2 text-center tracking-widest text-xl font-mono focus:outline-none focus:ring-2 focus:ring-(--accent-terra)"
                 />
               </div>
 
@@ -149,24 +155,24 @@ export default function AdminMfaSetupPage() {
               <button
                 type="submit"
                 disabled={state === "verifying" || code.length !== 6}
-                className="w-full bg-indigo-600 text-white rounded-lg px-4 py-2 font-semibold hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+                className="w-full bg-(--accent-terra) text-(--accent-beige) rounded-lg px-4 py-2 font-semibold hover:opacity-90 disabled:opacity-50 transition-colors"
               >
-                {state === "verifying" ? "Verifying…" : "Enable 2FA"}
+                {state === "verifying" ? "Verifying..." : "Enable 2FA"}
               </button>
             </form>
           </>
         )}
 
         {state === "done" && (
-          <p className="text-center text-green-600 font-semibold py-4">
-            2FA enabled! Redirecting…
+          <p className="text-center text-(--accent-green) font-semibold py-4">
+            2FA enabled! Redirecting...
           </p>
         )}
 
         <div className="mt-6 border-t pt-4">
           <button
             onClick={() => signOut({ callbackUrl: "/login" })}
-            className="w-full text-sm text-gray-400 hover:text-gray-600 transition-colors"
+            className="w-full text-sm text-foreground/60 hover:text-foreground/80 transition-colors"
           >
             Sign out instead
           </button>

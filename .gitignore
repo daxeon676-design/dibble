@@ -46,3 +46,6 @@ next-env.d.ts
 build-output.txt
 fresh-build.txt
 public/uploads/
+
+.vercel
+.env*.local

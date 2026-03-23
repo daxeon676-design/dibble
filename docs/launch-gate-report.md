@@ -1,16 +1,12 @@
 # Launch Gate Report
 
-Generated: 2026-03-17T19:11:33.103Z
+Generated: 2026-03-19T21:12:02.364Z
 
 ## Summary
 
-- Required checks passed: 5/6
+- Required checks passed: 6/6
 - Optional checks passed: 0/1
-- Launch gate status: FAIL
-
-## Required Failures
-
-- Launch Smoke Strict
+- Launch gate status: PASS
 
 ## Optional Failures
 
@@ -42,29 +38,29 @@ Generated: 2026-03-17T19:11:33.103Z
 
 [1m[46m RUN [49m[22m [36mv3.2.4 [39m[90mC:/Users/daxeo/Projects/dibble[39m
 
- [32m✓[39m src/lib/rate-limit.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 7[2mms[22m[39m
- [32m✓[39m src/lib/launch-readiness.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 70[2mms[22m[39m
+ [32m✓[39m src/lib/rate-limit.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m src/lib/launch-readiness.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 75[2mms[22m[39m
 [90mstdout[2m | src/lib/ops-alert-dispatcher.test.ts[2m > [22m[2mdispatchOpsAlert[2m > [22m[2mposts to webhook when configured
-[22m[39m{"timestamp":"2026-03-17T19:09:52.927Z","level":"info","event":"ops.alert.dispatch.sent","source":"admin_api","severity":"warn","title":"Test","httpStatus":200}
+[22m[39m{"timestamp":"2026-03-19T21:11:08.300Z","level":"info","event":"ops.alert.dispatch.sent","source":"admin_api","severity":"warn","title":"Test","httpStatus":200}
 
- [32m✓[39m src/lib/ops-alert-dispatcher.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 99[2mms[22m[39m
- [32m✓[39m src/app/api/auth/mfa/setup/route.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 168[2mms[22m[39m
- [32m✓[39m src/app/api/payments/webhook/route.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 169[2mms[22m[39m
- [32m✓[39m src/app/api/seller/payouts/route.test.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 338[2mms[22m[39m
-   [33m[2m✓[22m[39m seller payout profile validation[2m > [22mrejects bank transfer profiles without required bank details [33m 323[2mms[22m[39m
+ [32m✓[39m src/lib/ops-alert-dispatcher.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 147[2mms[22m[39m
+ [32m✓[39m src/app/api/payments/webhook/route.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 249[2mms[22m[39m
+ [32m✓[39m src/app/api/auth/mfa/setup/route.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 256[2mms[22m[39m
+ [32m✓[39m src/app/api/seller/payouts/route.test.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 400[2mms[22m[39m
+   [33m[2m✓[22m[39m seller payout profile validation[2m > [22mrejects bank transfer profiles without required bank details [33m 390[2mms[22m[39m
+ [32m✓[39m src/lib/ops-alerts.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m src/lib/payment-finalizer.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m src/lib/auth-security.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 4[2mms[22m[39m
  [32m✓[39m src/lib/order-status.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 4[2mms[22m[39m
- [32m✓[39m src/lib/ops-alerts.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 5[2mms[22m[39m
- [32m✓[39m src/lib/auth-security.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 7[2mms[22m[39m
- [32m✓[39m src/lib/payment-finalizer.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 6[2mms[22m[39m
- [32m✓[39m src/lib/checkout.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 5[2mms[22m[39m
- [32m✓[39m src/app/api/rbac-financial-routes.test.ts [2m([22m[2m6 tests[22m[2m)[22m[33m 973[2mms[22m[39m
-   [33m[2m✓[22m[39m RBAC financial endpoints[2m > [22mblocks unauthenticated access to admin payouts list [33m 358[2mms[22m[39m
-   [33m[2m✓[22m[39m RBAC financial endpoints[2m > [22mblocks unauthenticated access to seller payouts [33m 394[2mms[22m[39m
+ [32m✓[39m src/app/api/rbac-financial-routes.test.ts [2m([22m[2m6 tests[22m[2m)[22m[33m 819[2mms[22m[39m
+   [33m[2m✓[22m[39m RBAC financial endpoints[2m > [22mblocks unauthenticated access to admin payouts list [33m 419[2mms[22m[39m
+   [33m[2m✓[22m[39m RBAC financial endpoints[2m > [22mblocks unauthenticated access to seller payouts [33m 306[2mms[22m[39m
+ [32m✓[39m src/lib/checkout.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 4[2mms[22m[39m
 
 [2m Test Files [22m [1m[32m12 passed[39m[22m[90m (12)[39m
 [2m      Tests [22m [1m[32m40 passed[39m[22m[90m (40)[39m
-[2m   Start at [22m 19:09:51
-[2m   Duration [22m 1.81s[2m (transform 1.04s, setup 0ms, collect 1.43s, tests 1.85s, environment 4ms, prepare 2.49s)[22m
+[2m   Start at [22m 21:11:07
+[2m   Duration [22m 1.59s[2m (transform 891ms, setup 0ms, collect 1.09s, tests 1.97s, environment 3ms, prepare 2.42s)[22m
 ```
 
 ### Build
@@ -75,20 +71,23 @@ Generated: 2026-03-17T19:11:33.103Z
 
 ```text
 > dibble@0.1.0 build
-> next build
+> prisma generate && next build
+
+
+✔ Generated Prisma Client (7.5.0) to .\src\generated\prisma in 224ms
 
 ▲ Next.js 16.1.7 (Turbopack)
-- Environments: .env
+- Environments: .env.local, .env
 
   Creating an optimized production build ...
-✓ Compiled successfully in 49s
+✓ Compiled successfully in 9.6s
   Running TypeScript ...
   Collecting page data using 7 workers ...
   Generating static pages using 7 workers (0/82) ...
   Generating static pages using 7 workers (20/82) 
   Generating static pages using 7 workers (40/82) 
   Generating static pages using 7 workers (61/82) 
-✓ Generating static pages using 7 workers (82/82) in 519.6ms
+✓ Generating static pages using 7 workers (82/82) in 650.4ms
   Finalizing page optimization ...
 
 Route (app)
@@ -235,8 +234,11 @@ Security smoke passed (12 checks).
 PASS: DATABASE_URL is set
 PASS: NEXTAUTH_SECRET is set
 PASS: NEXTAUTH_URL is set
+PASS: NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY is set
 PASS: STRIPE_WEBHOOK_SECRET is set
+PASS: OPS_CRON_SECRET is set
 PASS: STRIPE_SECRET_KEY is set
+PASS: OPS_ALERT_WEBHOOK_URL is set
 PASS: data/seller-payout-profiles.json exists
 PASS: Weekly implementation plan exists
 PASS: Launch readiness tracker exists
@@ -248,7 +250,7 @@ Smoke check passed.
 
 - Command: `npm run launch:smoke:strict`
 - Required: Yes
-- Status: FAIL
+- Status: PASS
 
 ```text
 > dibble@0.1.0 launch:smoke:strict
@@ -257,17 +259,16 @@ Smoke check passed.
 PASS: DATABASE_URL is set
 PASS: NEXTAUTH_SECRET is set
 PASS: NEXTAUTH_URL is set
+PASS: NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY is set
 PASS: STRIPE_WEBHOOK_SECRET is set
+PASS: OPS_CRON_SECRET is set
 PASS: STRIPE_SECRET_KEY is set
+PASS: OPS_ALERT_WEBHOOK_URL is set
 PASS: data/seller-payout-profiles.json exists
 PASS: Weekly implementation plan exists
 PASS: Launch readiness tracker exists
-FAIL: NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY is missing
-FAIL: OPS_CRON_SECRET is missing
-FAIL: OPS_ALERT_WEBHOOK_URL is missing
-WARN: OPS_ALERT_WEBHOOK_BEARER_TOKEN is missing
 
-Smoke check failed.
+Smoke check passed.
 ```
 
 ### Prod Audit
@@ -300,7 +301,7 @@ node_modules/lodash
     @mrleebo/prisma-ast  0.4.2 - 0.13.1
     Depends on vulnerable versions of chevrotain
     node_modules/@mrleebo/prisma-ast
-      @prisma/dev  >=0.11.1
+      @prisma/dev  0.11.1 - 0.22.0
       Depends on vulnerable versions of @mrleebo/prisma-ast
       node_modules/@prisma/dev
         prisma  >=6.20.0-dev.1
