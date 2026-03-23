@@ -6,23 +6,25 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { AddToCartButton } from "@/app/buyer/marketplace/product-card-actions";
 import { SavedItemButton } from "@/app/components/saved-item-button";
-import { getProductMetaMap, getSiteConfig } from "@/lib/site-config";
+import { getProductMetaMap, getSellerShopProfiles, getSiteConfig } from "@/lib/site-config";
 import MarketplaceSearch from "./marketplace-search";
 
 export default async function BuyerMarketplacePage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; seller?: string; category?: string; sort?: string; min?: string; max?: string }>;
+  searchParams: Promise<{ q?: string; seller?: string; category?: string; sort?: string; min?: string; max?: string; local?: string; radius?: string }>;
 }) {
   const session = await getServerSession(authOptions);
 
-  const { q, seller, category, sort, min, max } = await searchParams;
+  const { q, seller, category, sort, min, max, local, radius } = await searchParams;
   const query = q?.trim() ?? "";
   const sellerFilter = seller?.trim() ?? "";
   const categoryFilter = category?.trim() ?? "";
   const sortFilter = sort?.trim() ?? "newest";
   const minPounds = min?.trim() ?? "";
   const maxPounds = max?.trim() ?? "";
+  const localFilter = local?.trim() ?? "";
+  const radiusFilter = Math.max(0, Number(radius?.trim() ?? "0"));
 
   const config = await getSiteConfig();
 
@@ -46,7 +48,10 @@ export default async function BuyerMarketplacePage({
     orderBy: { createdAt: "desc" },
   });
 
-  const meta = await getProductMetaMap();
+  const [meta, sellerProfiles] = await Promise.all([
+    getProductMetaMap(),
+    getSellerShopProfiles(),
+  ]);
   let products = productsRaw.filter((product) => {
     const productCategory = meta[product.id]?.category ?? "";
     if (categoryFilter && productCategory !== categoryFilter) {
@@ -56,6 +61,18 @@ export default async function BuyerMarketplacePage({
     const pounds = product.priceCents / 100;
     if (minPounds && pounds < Number(minPounds)) return false;
     if (maxPounds && pounds > Number(maxPounds)) return false;
+
+    if (localFilter) {
+      const profile = sellerProfiles[product.seller.id] ?? {};
+      const sellerAllowsLocal = Boolean(profile.localDiscoveryEnabled);
+      const sellerLocation = (profile.localDiscoveryLocation ?? "").toLowerCase();
+      const localMatch = sellerLocation.includes(localFilter.toLowerCase());
+      const sellerRadius = Number(profile.localDiscoveryRadiusMiles ?? 0);
+      if (!sellerAllowsLocal || !localMatch || (radiusFilter > 0 && sellerRadius < radiusFilter)) {
+        return false;
+      }
+    }
+
     return true;
   });
 
@@ -66,6 +83,19 @@ export default async function BuyerMarketplacePage({
   } else if (sortFilter === "name-asc") {
     products = [...products].sort((a, b) => a.title.localeCompare(b.title));
   }
+
+  const buildCategoryHref = (nextCategory: string) => {
+    const params = new URLSearchParams();
+    if (query) params.set("q", query);
+    if (nextCategory) params.set("category", nextCategory);
+    if (sortFilter && sortFilter !== "newest") params.set("sort", sortFilter);
+    if (minPounds) params.set("min", minPounds);
+    if (maxPounds) params.set("max", maxPounds);
+    if (localFilter) params.set("local", localFilter);
+    if (radiusFilter > 0) params.set("radius", String(radiusFilter));
+    const qs = params.toString();
+    return qs ? `/buyer/marketplace?${qs}` : "/buyer/marketplace";
+  };
 
   return (
     <main className="mx-auto min-h-screen max-w-7xl px-6 py-10 text-foreground">
@@ -91,8 +121,28 @@ export default async function BuyerMarketplacePage({
           defaultSort={sortFilter}
           defaultMin={minPounds}
           defaultMax={maxPounds}
+          defaultLocal={localFilter}
+          defaultRadius={radius?.trim() ?? ""}
           categories={config.categories}
         />
+      </div>
+
+      <div className="mb-5 flex flex-wrap gap-2">
+        <Link
+          href={buildCategoryHref("")}
+          className={`rounded-full border px-3 py-1 text-xs ${categoryFilter ? "border-(--accent-terra)/30 text-(--accent-terra)" : "border-(--accent-terra) bg-(--accent-terra) text-white"}`}
+        >
+          All
+        </Link>
+        {config.categories.map((cat) => (
+          <Link
+            key={cat}
+            href={buildCategoryHref(cat)}
+            className={`rounded-full border px-3 py-1 text-xs ${categoryFilter === cat ? "border-(--accent-terra) bg-(--accent-terra) text-white" : "border-(--accent-terra)/30 text-(--accent-terra) hover:bg-(--accent-beige)/40"}`}
+          >
+            {cat}
+          </Link>
+        ))}
       </div>
 
       {/* Result count */}

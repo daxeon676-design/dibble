@@ -15,6 +15,9 @@ const shopProfileSchema = z.object({
   instagramUrl: optionalUrl,
   tiktokUrl: optionalUrl,
   websiteUrl: optionalUrl,
+  localDiscoveryEnabled: z.boolean().optional(),
+  localDiscoveryLocation: z.string().trim().max(120).optional(),
+  localDiscoveryRadiusMiles: z.number().int().min(0).max(200).optional(),
 });
 
 export async function GET() {
@@ -54,6 +57,9 @@ export async function PUT(request: Request) {
     instagramUrl: parsed.data.instagramUrl || "",
     tiktokUrl: parsed.data.tiktokUrl || "",
     websiteUrl: parsed.data.websiteUrl || "",
+    localDiscoveryEnabled: Boolean(parsed.data.localDiscoveryEnabled),
+    localDiscoveryLocation: parsed.data.localDiscoveryLocation?.trim() || "",
+    localDiscoveryRadiusMiles: Math.max(0, parsed.data.localDiscoveryRadiusMiles ?? 0),
   };
 
   await setSellerShopProfile(session.user.id, normalized);

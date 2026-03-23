@@ -28,6 +28,8 @@ export default function MarketplaceSearch({
   defaultSort,
   defaultMin,
   defaultMax,
+  defaultLocal,
+  defaultRadius,
   categories,
 }: {
   defaultValue: string;
@@ -35,6 +37,8 @@ export default function MarketplaceSearch({
   defaultSort: string;
   defaultMin: string;
   defaultMax: string;
+  defaultLocal: string;
+  defaultRadius: string;
   categories: string[];
 }) {
   const router = useRouter();
@@ -44,6 +48,8 @@ export default function MarketplaceSearch({
   const [sort, setSort] = useState(defaultSort);
   const [min, setMin] = useState(defaultMin);
   const [max, setMax] = useState(defaultMax);
+  const [local, setLocal] = useState(defaultLocal);
+  const [radius, setRadius] = useState(defaultRadius);
   const [recentSearches, setRecentSearches] = useState<string[]>(() => readRecentSearches());
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
 
@@ -53,9 +59,9 @@ export default function MarketplaceSearch({
     return categories.filter((item) => item.toLowerCase().includes(normalized)).slice(0, 6);
   }, [categories, value]);
 
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  function applyFilters(nextCategory?: string) {
     const cleaned = value.trim();
+    const selectedCategory = nextCategory ?? category;
 
     if (cleaned) {
       const next = [
@@ -73,16 +79,23 @@ export default function MarketplaceSearch({
       params.delete("q");
     }
 
-    if (category) params.set("category", category); else params.delete("category");
+    if (selectedCategory) params.set("category", selectedCategory); else params.delete("category");
     if (sort) params.set("sort", sort); else params.delete("sort");
     if (min) params.set("min", min); else params.delete("min");
     if (max) params.set("max", max); else params.delete("max");
+    if (local.trim()) params.set("local", local.trim()); else params.delete("local");
+    if (radius.trim()) params.set("radius", radius.trim()); else params.delete("radius");
 
     router.push(`/buyer/marketplace?${params.toString()}`);
   }
 
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    applyFilters();
+  }
+
   return (
-    <form onSubmit={handleSubmit} className="grid max-w-5xl gap-2 md:grid-cols-6">
+    <form onSubmit={handleSubmit} className="grid max-w-6xl gap-2 md:grid-cols-8">
       <div className="relative md:col-span-2">
         <input
           type="search"
@@ -122,7 +135,10 @@ export default function MarketplaceSearch({
                     <button
                       key={item}
                       type="button"
-                      onMouseDown={() => setCategory(item)}
+                      onMouseDown={() => {
+                        setCategory(item);
+                        applyFilters(item);
+                      }}
                       className="rounded-full border border-(--accent-terra)/30 px-3 py-1 text-xs text-(--accent-terra)"
                     >
                       {item}
@@ -148,9 +164,11 @@ export default function MarketplaceSearch({
       </select>
       <input type="number" step="0.01" min="0" value={min} onChange={(e) => setMin(e.target.value)} placeholder="Min £" className="rounded-md border border-(--accent-terra)/30 bg-white px-3 py-2 text-sm text-foreground" />
       <input type="number" step="0.01" min="0" value={max} onChange={(e) => setMax(e.target.value)} placeholder="Max £" className="rounded-md border border-(--accent-terra)/30 bg-white px-3 py-2 text-sm text-foreground" />
+      <input type="text" value={local} onChange={(e) => setLocal(e.target.value)} placeholder="Local area (e.g. Bristol)" className="rounded-md border border-(--accent-terra)/30 bg-white px-3 py-2 text-sm text-foreground md:col-span-2" />
+      <input type="number" min="0" max="200" value={radius} onChange={(e) => setRadius(e.target.value)} placeholder="Within miles" className="rounded-md border border-(--accent-terra)/30 bg-white px-3 py-2 text-sm text-foreground" />
       <button
         type="submit"
-        className="rounded-md bg-(--accent-terra) px-4 py-2 text-sm font-semibold text-white md:col-span-6"
+        className="rounded-md bg-(--accent-terra) px-4 py-2 text-sm font-semibold text-white md:col-span-8"
       >
         Apply Filters
       </button>

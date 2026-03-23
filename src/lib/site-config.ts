@@ -8,6 +8,12 @@ export type DeliveryOption = {
   enabled: boolean;
 };
 
+export type SellerDeliverySettings = {
+  optionIds: string[];
+  customCostsPence: Record<string, number>;
+  freeDeliveryThresholdPence: number;
+};
+
 export type SiteConfig = {
   categories: string[];
   deliveryOptions: DeliveryOption[];
@@ -19,7 +25,8 @@ export type SiteConfig = {
   maxActiveSellerAccounts: number;
 };
 
-type SellerDeliveryMap = Record<string, string[]>;
+type SellerDeliveryMap = Record<string, string[] | Partial<SellerDeliverySettings>>;
+type SellerDeliverySettingsMap = Record<string, SellerDeliverySettings>;
 export type ProductMeta = {
   category?: string;
   materials?: string;
@@ -33,6 +40,9 @@ export type SellerShopProfile = {
   instagramUrl?: string;
   tiktokUrl?: string;
   websiteUrl?: string;
+  localDiscoveryEnabled?: boolean;
+  localDiscoveryLocation?: string;
+  localDiscoveryRadiusMiles?: number;
 };
 
 export type SellerPayoutMethod = "STRIPE_CONNECT" | "BANK_TRANSFER" | "PAYPAL" | "MANUAL_REVIEW";
@@ -63,6 +73,42 @@ const sellerShopProfilesPath = path.join(dataDir, "seller-shop-profiles.json");
 const sellerStripeAccountsPath = path.join(dataDir, "seller-stripe-accounts.json");
 const sellerPayoutProfilesPath = path.join(dataDir, "seller-payout-profiles.json");
 
+function toPence(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.round(value));
+}
+
+function normalizeSellerDeliverySettings(input: string[] | Partial<SellerDeliverySettings> | undefined): SellerDeliverySettings {
+  if (!input) {
+    return {
+      optionIds: [],
+      customCostsPence: {},
+      freeDeliveryThresholdPence: 0,
+    };
+  }
+
+  if (Array.isArray(input)) {
+    return {
+      optionIds: [...new Set(input)],
+      customCostsPence: {},
+      freeDeliveryThresholdPence: 0,
+    };
+  }
+
+  const customCostsRaw = input.customCostsPence ?? {};
+  const normalizedCustomCosts = Object.fromEntries(
+    Object.entries(customCostsRaw)
+      .filter(([id]) => Boolean(id))
+      .map(([id, pence]) => [id, toPence(Number(pence))]),
+  );
+
+  return {
+    optionIds: [...new Set(input.optionIds ?? [])],
+    customCostsPence: normalizedCustomCosts,
+    freeDeliveryThresholdPence: toPence(Number(input.freeDeliveryThresholdPence ?? 0)),
+  };
+}
+
 export function calculateMarketplaceSplit(totalCents: number, platformFeePercent: number) {
   const normalizedPercent = Number.isFinite(platformFeePercent) ? Math.max(0, platformFeePercent) : 0;
   const platformFeeCents = Math.round(totalCents * (normalizedPercent / 100));
@@ -91,16 +137,19 @@ export async function getSiteConfig(): Promise<SiteConfig> {
   const defaults: SiteConfig = {
     categories: [
       "Accessories",
+      "Apparell",
       "Bath/Beauty",
       "Books",
       "Carving",
-      "Clothing",
+      "Food",
       "Home",
       "Jewellery",
       "Knitting/Crochet",
       "Lino Prints",
+      "Local",
       "Painting",
       "Paper",
+      "Pets",
       "Photography",
       "Picture Frames",
       "Pictures",
@@ -119,10 +168,21 @@ export async function getSiteConfig(): Promise<SiteConfig> {
   };
 
   const stored = await readJsonFile<Partial<SiteConfig>>(configPath, defaults);
+  const storedCategories = (stored.categories ?? defaults.categories).map((item) =>
+    item.trim().toLowerCase() === "home decor" ? "Home" : item,
+  );
+
+  const requiredCategories = ["Apparell", "Food", "Local", "Pets", "Home"];
+  for (const required of requiredCategories) {
+    if (!storedCategories.some((item) => item.toLowerCase() === required.toLowerCase())) {
+      storedCategories.push(required);
+    }
+  }
+
   return {
     ...defaults,
     ...stored,
-    categories: stored.categories ?? defaults.categories,
+    categories: [...new Set(storedCategories)],
     deliveryOptions: stored.deliveryOptions ?? defaults.deliveryOptions,
   };
 }
@@ -131,14 +191,59 @@ export async function saveSiteConfig(config: SiteConfig) {
   await writeJsonFile(configPath, config);
 }
 
-export async function getSellerDeliveryOptionsMap(): Promise<SellerDeliveryMap> {
-  return readJsonFile<SellerDeliveryMap>(sellerDeliveryPath, {});
+export async function getSellerDeliverySettingsMap(): Promise<SellerDeliverySettingsMap> {
+  const rawMap = await readJsonFile<SellerDeliveryMap>(sellerDeliveryPath, {});
+
+  return Object.fromEntries(
+    Object.entries(rawMap).map(([sellerId, rawValue]) => [sellerId, normalizeSellerDeliverySettings(rawValue)]),
+  );
+}
+
+export async function getSellerDeliveryOptionsMap(): Promise<Record<string, string[]>> {
+  const map = await getSellerDeliverySettingsMap();
+  return Object.fromEntries(Object.entries(map).map(([sellerId, settings]) => [sellerId, settings.optionIds]));
+}
+
+export function resolveSellerDeliveryCostPence(
+  settings: SellerDeliverySettings,
+  optionId: string,
+  fallbackCostPence: number,
+  sellerSubtotalPence: number,
+): number {
+  const threshold = toPence(settings.freeDeliveryThresholdPence);
+  if (threshold > 0 && sellerSubtotalPence >= threshold) {
+    return 0;
+  }
+
+  const custom = settings.customCostsPence[optionId];
+  if (Number.isFinite(custom)) {
+    return toPence(custom);
+  }
+
+  return toPence(fallbackCostPence);
+}
+
+export async function setSellerDeliverySettings(sellerId: string, settingsPatch: Partial<SellerDeliverySettings>) {
+  const map = await getSellerDeliverySettingsMap();
+  const current = map[sellerId] ?? normalizeSellerDeliverySettings(undefined);
+
+  map[sellerId] = normalizeSellerDeliverySettings({
+    ...current,
+    ...settingsPatch,
+    optionIds: settingsPatch.optionIds ?? current.optionIds,
+    customCostsPence: {
+      ...current.customCostsPence,
+      ...(settingsPatch.customCostsPence ?? {}),
+    },
+    freeDeliveryThresholdPence:
+      settingsPatch.freeDeliveryThresholdPence ?? current.freeDeliveryThresholdPence,
+  });
+
+  await writeJsonFile(sellerDeliveryPath, map);
 }
 
 export async function setSellerDeliveryOptions(sellerId: string, optionIds: string[]) {
-  const map = await getSellerDeliveryOptionsMap();
-  map[sellerId] = [...new Set(optionIds)];
-  await writeJsonFile(sellerDeliveryPath, map);
+  await setSellerDeliverySettings(sellerId, { optionIds: [...new Set(optionIds)] });
 }
 
 export async function getProductMetaMap(): Promise<ProductMetaMap> {

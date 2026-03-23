@@ -3,9 +3,17 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { authOptions } from "@/lib/auth";
-import { getSellerDeliveryOptionsMap, setSellerDeliveryOptions, getSiteConfig } from "@/lib/site-config";
+import {
+  getSellerDeliverySettingsMap,
+  setSellerDeliverySettings,
+  getSiteConfig,
+} from "@/lib/site-config";
 
-const payloadSchema = z.object({ optionIds: z.array(z.string()) });
+const payloadSchema = z.object({
+  optionIds: z.array(z.string()),
+  customCostsPence: z.record(z.string(), z.number().int().min(0)).default({}),
+  freeDeliveryThresholdPence: z.number().int().min(0).default(0),
+});
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -13,11 +21,23 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const map = await getSellerDeliveryOptionsMap();
+  const map = await getSellerDeliverySettingsMap();
   const config = await getSiteConfig();
-  const selected = map[session.user.id] ?? config.deliveryOptions.filter((o) => o.enabled).map((o) => o.id);
+  const defaultOptionIds = config.deliveryOptions.filter((o) => o.enabled).map((o) => o.id);
+  const current = map[session.user.id] ?? {
+    optionIds: defaultOptionIds,
+    customCostsPence: {},
+    freeDeliveryThresholdPence: 0,
+  };
 
-  return NextResponse.json({ selected, available: config.deliveryOptions.filter((o) => o.enabled) });
+  const selected = current.optionIds.length > 0 ? current.optionIds : defaultOptionIds;
+
+  return NextResponse.json({
+    selected,
+    available: config.deliveryOptions.filter((o) => o.enabled),
+    customCostsPence: current.customCostsPence,
+    freeDeliveryThresholdPence: current.freeDeliveryThresholdPence,
+  });
 }
 
 export async function PUT(request: Request) {
@@ -32,6 +52,10 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
   }
 
-  await setSellerDeliveryOptions(session.user.id, parsed.data.optionIds);
+  await setSellerDeliverySettings(session.user.id, {
+    optionIds: parsed.data.optionIds,
+    customCostsPence: parsed.data.customCostsPence,
+    freeDeliveryThresholdPence: parsed.data.freeDeliveryThresholdPence,
+  });
   return NextResponse.json({ ok: true });
 }

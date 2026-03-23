@@ -2,9 +2,14 @@ import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 
 import { authOptions } from "@/lib/auth";
+import { calculateOrderTotalCents, groupCartItemsBySeller } from "@/lib/checkout";
 import { prisma } from "@/lib/prisma";
 import { CheckoutClient } from "./checkout-client";
-import { getSiteConfig } from "@/lib/site-config";
+import {
+  getSiteConfig,
+  getSellerDeliverySettingsMap,
+  resolveSellerDeliveryCostPence,
+} from "@/lib/site-config";
 
 export default async function CheckoutPage() {
   const session = await getServerSession(authOptions);
@@ -21,6 +26,7 @@ export default async function CheckoutPage() {
           product: {
             select: {
               id: true,
+              sellerId: true,
               title: true,
               priceCents: true,
             },
@@ -34,7 +40,35 @@ export default async function CheckoutPage() {
     redirect("/buyer/cart?error=empty");
   }
 
-  const config = await getSiteConfig();
+  const [config, sellerDeliveryMap] = await Promise.all([
+    getSiteConfig(),
+    getSellerDeliverySettingsMap(),
+  ]);
+
+  const enabledOptions = config.deliveryOptions.filter((option) => option.enabled);
+  const groupedItems = groupCartItemsBySeller(cart.items);
+
+  const deliveryOptions = enabledOptions.map((option) => {
+    let costPence = 0;
+    for (const [sellerId, items] of groupedItems.entries()) {
+      const sellerSettings = sellerDeliveryMap[sellerId] ?? {
+        optionIds: enabledOptions.map((opt) => opt.id),
+        customCostsPence: {},
+        freeDeliveryThresholdPence: 0,
+      };
+      costPence += resolveSellerDeliveryCostPence(
+        sellerSettings,
+        option.id,
+        option.costPence,
+        calculateOrderTotalCents(items),
+      );
+    }
+
+    return {
+      ...option,
+      costPence,
+    };
+  });
   const [user, savedAddresses] = await Promise.all([
     prisma.user.findUnique({
     where: { id: session.user.id },
@@ -69,7 +103,7 @@ export default async function CheckoutPage() {
       initialCart={cart}
       initialUser={user}
       initialSavedAddresses={savedAddresses}
-      deliveryOptions={config.deliveryOptions}
+      deliveryOptions={deliveryOptions}
     />
   );
 }

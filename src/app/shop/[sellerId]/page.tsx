@@ -146,6 +146,12 @@ export default async function SellerShopPage({
               initiallyFollowing={Boolean(isFollowing)}
               initialFollowers={followersCount}
             />
+            <a
+              href={`mailto:${seller.email}?subject=${encodeURIComponent(`Question about ${shopName}`)}`}
+              className="rounded-md border border-(--accent-terra)/40 px-3 py-1 text-xs text-(--accent-terra) hover:bg-(--accent-beige)/40"
+            >
+              Message Seller
+            </a>
           </div>
         </div>
       </div>

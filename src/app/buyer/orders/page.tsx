@@ -106,14 +106,6 @@ export default async function BuyerOrdersPage() {
                 </a>
               ) : null}
 
-              {/* Message seller */}
-              <Link
-                href={`/buyer/messages/new`}
-                className="text-xs border border-slate-600 rounded px-3 py-1.5 hover:bg-slate-800"
-              >
-                Message Seller
-              </Link>
-
               {/* Raise dispute (only for processing/delivered orders without one) */}
               {(order.status === "PROCESSING" || order.status === "SHIPPED" || order.status === "DELIVERED") &&
                 !order.dispute && (

@@ -7,7 +7,11 @@ import { authOptions } from "@/lib/auth";
 import { calculateOrderTotalCents, groupCartItemsBySeller } from "@/lib/checkout";
 import { getRequestId, logApiEvent } from "@/lib/observability";
 import { prisma } from "@/lib/prisma";
-import { getSellerDeliveryOptionsMap, getSiteConfig } from "@/lib/site-config";
+import {
+  getSellerDeliverySettingsMap,
+  getSiteConfig,
+  resolveSellerDeliveryCostPence,
+} from "@/lib/site-config";
 
 const createOrderSchema = z.object({
   deliveryOptionId: z.string().min(1),
@@ -95,7 +99,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Selected delivery option is not available." }, { status: 409 });
   }
 
-  const sellerDeliveryMap = await getSellerDeliveryOptionsMap();
+  const sellerDeliveryMap = await getSellerDeliverySettingsMap();
 
   const cart = await prisma.cart.findUnique({
     where: { buyerId: session.user.id },
@@ -133,7 +137,7 @@ export async function POST(request: Request) {
 
   const enabledOptionIds = config.deliveryOptions.filter((o) => o.enabled).map((o) => o.id);
   for (const sellerId of groupedBySeller.keys()) {
-    const offered = sellerDeliveryMap[sellerId] ?? enabledOptionIds;
+    const offered = sellerDeliveryMap[sellerId]?.optionIds ?? enabledOptionIds;
     if (!offered.includes(selectedDelivery.id)) {
       logApiEvent("warn", "orders.create.delivery_not_offered", {
         requestId,
@@ -152,7 +156,19 @@ export async function POST(request: Request) {
     const created = [] as Array<{ id: string }>;
 
     for (const [sellerId, items] of groupedBySeller.entries()) {
-      const totalCents = calculateOrderTotalCents(items) + selectedDelivery.costPence;
+      const sellerSubtotalCents = calculateOrderTotalCents(items);
+      const sellerDeliverySettings = sellerDeliveryMap[sellerId] ?? {
+        optionIds: enabledOptionIds,
+        customCostsPence: {},
+        freeDeliveryThresholdPence: 0,
+      };
+      const deliveryCostCents = resolveSellerDeliveryCostPence(
+        sellerDeliverySettings,
+        selectedDelivery.id,
+        selectedDelivery.costPence,
+        sellerSubtotalCents,
+      );
+      const totalCents = sellerSubtotalCents + deliveryCostCents;
 
       const order = await tx.order.create({
         data: {

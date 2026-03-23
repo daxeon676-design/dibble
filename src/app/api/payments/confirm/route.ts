@@ -2,7 +2,7 @@ import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { OrderStatus } from "@/generated/prisma/enums";
+import { OrderStatus, PaymentStatus } from "@/generated/prisma/enums";
 import { authOptions } from "@/lib/auth";
 import { getRequestId, logApiEvent } from "@/lib/observability";
 import { finalizeOrderPayment } from "@/lib/payment-finalizer";
@@ -68,6 +68,10 @@ export async function POST(request: Request) {
   }
 
   if (order.status !== OrderStatus.PENDING_PAYMENT) {
+    if (order.payment?.status === PaymentStatus.SUCCEEDED) {
+      return NextResponse.json({ order, simulated: false, alreadyConfirmed: true });
+    }
+
     return NextResponse.json({ error: "Order is not awaiting payment." }, { status: 409 });
   }
 

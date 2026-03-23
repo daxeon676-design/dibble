@@ -10,6 +10,9 @@ type Props = {
     instagramUrl?: string;
     tiktokUrl?: string;
     websiteUrl?: string;
+    localDiscoveryEnabled?: boolean;
+    localDiscoveryLocation?: string;
+    localDiscoveryRadiusMiles?: number;
   };
 };
 
@@ -20,6 +23,11 @@ export function SellerSettingsClient({ initialProfile }: Props) {
   const [instagramUrl, setInstagramUrl] = useState(initialProfile.instagramUrl ?? "");
   const [tiktokUrl, setTiktokUrl] = useState(initialProfile.tiktokUrl ?? "");
   const [websiteUrl, setWebsiteUrl] = useState(initialProfile.websiteUrl ?? "");
+  const [localDiscoveryEnabled, setLocalDiscoveryEnabled] = useState(Boolean(initialProfile.localDiscoveryEnabled));
+  const [localDiscoveryLocation, setLocalDiscoveryLocation] = useState(initialProfile.localDiscoveryLocation ?? "");
+  const [localDiscoveryRadiusMiles, setLocalDiscoveryRadiusMiles] = useState(
+    String(initialProfile.localDiscoveryRadiusMiles ?? 10),
+  );
   const [state, setState] = useState<"idle" | "saving" | "done" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -53,7 +61,17 @@ export function SellerSettingsClient({ initialProfile }: Props) {
     const response = await fetch("/api/seller/shop-profile", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ headline, description, logoUrl, instagramUrl, tiktokUrl, websiteUrl }),
+      body: JSON.stringify({
+        headline,
+        description,
+        logoUrl,
+        instagramUrl,
+        tiktokUrl,
+        websiteUrl,
+        localDiscoveryEnabled,
+        localDiscoveryLocation,
+        localDiscoveryRadiusMiles: Math.max(0, Number(localDiscoveryRadiusMiles || "0")),
+      }),
     });
 
     const payload = (await response.json().catch(() => null)) as { error?: string } | null;
@@ -144,6 +162,39 @@ export function SellerSettingsClient({ initialProfile }: Props) {
             value={websiteUrl}
             onChange={(event) => setWebsiteUrl(event.target.value)}
             placeholder="https://yourshop.com"
+            className="mt-1 w-full rounded-md border border-(--accent-terra)/50 bg-white px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-(--accent-terra)"
+          />
+        </label>
+      </div>
+
+      <div className="rounded-md border border-(--accent-terra)/25 bg-(--accent-beige)/25 p-4 space-y-3">
+        <label className="flex items-center gap-2 text-sm text-foreground">
+          <input
+            type="checkbox"
+            checked={localDiscoveryEnabled}
+            onChange={(event) => setLocalDiscoveryEnabled(event.target.checked)}
+          />
+          Allow buyers to discover my shop as a local seller
+        </label>
+
+        <label className="block text-sm text-foreground">
+          <span>Local discovery location (e.g. Bristol, BS1)</span>
+          <input
+            value={localDiscoveryLocation}
+            onChange={(event) => setLocalDiscoveryLocation(event.target.value)}
+            placeholder="Bristol, BS1"
+            className="mt-1 w-full rounded-md border border-(--accent-terra)/50 bg-white px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-(--accent-terra)"
+          />
+        </label>
+
+        <label className="block text-sm text-foreground">
+          <span>Discovery radius in miles</span>
+          <input
+            type="number"
+            min="0"
+            max="200"
+            value={localDiscoveryRadiusMiles}
+            onChange={(event) => setLocalDiscoveryRadiusMiles(event.target.value)}
             className="mt-1 w-full rounded-md border border-(--accent-terra)/50 bg-white px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-(--accent-terra)"
           />
         </label>

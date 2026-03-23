@@ -1,5 +1,5 @@
 {
-  "categories": ["Art", "Home Decor", "Jewelry", "Prints", "Ceramics"],
+  "categories": ["Art", "Home", "Jewelry", "Prints", "Ceramics", "Apparell", "Food", "Local", "Pets"],
   "deliveryOptions": [
     { "id": "standard", "name": "Standard Delivery", "costPence": 399, "enabled": true },
     { "id": "express", "name": "Express Delivery", "costPence": 799, "enabled": true }
