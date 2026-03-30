@@ -6,6 +6,7 @@ interface FinanceMetrics {
   period: string;
   gmvCents: number;
   platformFeeCents: number;
+  platformFeePercent: number;
   sellerEarningsCents: number;
   payoutsCents: number;
   pendingPayoutsCents: number;
@@ -72,7 +73,7 @@ export default function FinanceDashboardPage() {
     {
       label: "Platform Fees",
       value: `£${(metrics.platformFeeCents / 100).toFixed(2)}`,
-      subtext: "15% commission",
+      subtext: `${metrics.platformFeePercent}% commission`,
       color: "bg-blue-50 border-blue-200",
       statColor: "text-blue-700",
     },

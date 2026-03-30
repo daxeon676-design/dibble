@@ -84,6 +84,24 @@ export default async function BuyerMarketplacePage({
     products = [...products].sort((a, b) => a.title.localeCompare(b.title));
   }
 
+  const reviewSummaries = products.length === 0
+    ? []
+    : await prisma.review.groupBy({
+        by: ["productId"],
+        where: { productId: { in: products.map((product) => product.id) } },
+        _avg: { rating: true },
+        _count: { _all: true },
+      });
+  const reviewSummaryByProductId = new Map(
+    reviewSummaries.map((summary) => [
+      summary.productId,
+      {
+        average: summary._avg.rating,
+        count: summary._count._all,
+      },
+    ]),
+  );
+
   const buildCategoryHref = (nextCategory: string) => {
     const params = new URLSearchParams();
     if (query) params.set("q", query);
@@ -174,6 +192,7 @@ export default async function BuyerMarketplacePage({
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {products.map((product) => {
             const categoriesForCard = getProductCategories(meta[product.id]);
+            const reviewSummary = reviewSummaryByProductId.get(product.id);
             return (
               <article key={product.id} className="group rounded-xl border border-(--accent-terra)/15 bg-white shadow-sm hover:shadow-md transition-shadow overflow-hidden">
                 <Link href={`/products/${product.id}`} className="block">
@@ -213,6 +232,20 @@ export default async function BuyerMarketplacePage({
                   <Link href={`/shop/${product.seller.id}`} className="text-xs text-(--accent-green) hover:underline block truncate">
                     {product.seller.displayName ?? product.seller.email}
                   </Link>
+                  <div className="flex items-center gap-2 text-xs">
+                    {reviewSummary?.average ? (
+                      <>
+                        <span className="tracking-tight text-amber-400">
+                          {"★".repeat(Math.round(reviewSummary.average))}{"☆".repeat(5 - Math.round(reviewSummary.average))}
+                        </span>
+                        <span className="text-foreground/60">
+                          {reviewSummary.average.toFixed(1)} · {reviewSummary.count} review{reviewSummary.count === 1 ? "" : "s"}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="text-foreground/45">No reviews yet</span>
+                    )}
+                  </div>
                   <p className="text-sm font-bold text-(--accent-terra)">£{(product.priceCents / 100).toFixed(2)}</p>
                   {session?.user ? (
                     <>

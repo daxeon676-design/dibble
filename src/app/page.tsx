@@ -88,6 +88,7 @@ function ProductCarousel({
 
 const CATEGORY_ICONS: Record<string, string> = {
   Accessories: "💍",
+  Apparel: "👕",
   Apparell: "👕",
   Art: "🎨",
   "Bath & Beauty": "🧴",
@@ -101,6 +102,7 @@ const CATEGORY_ICONS: Record<string, string> = {
   Home: "🏠",
   "Home & Living": "🏠",
   Jewellery: "✨",
+  "Knitting & Crochet": "🧶",
   Local: "📍",
   "Paper & Party": "🎉",
   Prints: "🖼️",

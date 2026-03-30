@@ -3,11 +3,13 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { calculateMarketplaceSplit, getSiteConfig } from "@/lib/site-config";
 
 interface FinanceReport {
   period: string;
   gmvCents: number;
   platformFeeCents: number;
+  platformFeePercent: number;
   sellerEarningsCents: number;
   payoutsCents: number;
   pendingPayoutsCents: number;
@@ -42,6 +44,8 @@ export async function getFinanceReport(
   startDate: Date,
   endDate: Date
 ): Promise<FinanceReport> {
+  const config = await getSiteConfig();
+
   // Get all orders in period
   const orders = await prisma.order.findMany({
     where: {
@@ -55,8 +59,10 @@ export async function getFinanceReport(
   });
 
   const gmvCents = orders.reduce((sum, order) => sum + (order.payment?.amountCents || 0), 0);
-  const platformFeeCents = Math.round(gmvCents * 0.15); // 15% platform fee
-  const sellerEarningsCents = gmvCents - platformFeeCents;
+  const { platformFeeCents, sellerPayoutCents: sellerEarningsCents } = calculateMarketplaceSplit(
+    gmvCents,
+    config.platformFeePercent,
+  );
 
   // Get payouts in period
   const payouts = await prisma.sellerPayout.findMany({
@@ -94,6 +100,7 @@ export async function getFinanceReport(
     period: `${startDate.toLocaleDateString()} - ${endDate.toLocaleDateString()}`,
     gmvCents,
     platformFeeCents,
+    platformFeePercent: config.platformFeePercent,
     sellerEarningsCents,
     payoutsCents,
     pendingPayoutsCents,
@@ -108,6 +115,8 @@ export async function getSellerSettlementReport(
   startDate: Date,
   endDate: Date
 ): Promise<SellerSettlementReport | null> {
+  const config = await getSiteConfig();
+
   const seller = await prisma.user.findUnique({
     where: { id: sellerId },
     select: {
@@ -134,8 +143,10 @@ export async function getSellerSettlementReport(
   });
 
   const gmvCents = orders.reduce((sum, order) => sum + (order.payment?.amountCents || 0), 0);
-  const platformFeeCents = Math.round(gmvCents * 0.15);
-  const netEarningsCents = gmvCents - platformFeeCents;
+  const { platformFeeCents, sellerPayoutCents: netEarningsCents } = calculateMarketplaceSplit(
+    gmvCents,
+    config.platformFeePercent,
+  );
 
   const payouts = await prisma.sellerPayout.findMany({
     where: {
@@ -164,15 +175,18 @@ export async function getSellerSettlementReport(
     netEarningsCents,
     paidOutCents,
     pendingCents,
-    orders: orders.map((order) => ({
-      orderId: order.id,
-      buyerEmail: order.buyer.email,
-      totalCents: order.payment?.amountCents || 0,
-      feesCents: Math.round((order.payment?.amountCents || 0) * 0.15),
-      netCents: Math.round((order.payment?.amountCents || 0) * 0.85),
-      payoutStatus: "TBD", // Will be connected to payout status
-      createdAt: order.createdAt,
-    })),
+    orders: orders.map((order) => {
+      const split = calculateMarketplaceSplit(order.payment?.amountCents || 0, config.platformFeePercent);
+      return {
+        orderId: order.id,
+        buyerEmail: order.buyer.email,
+        totalCents: order.payment?.amountCents || 0,
+        feesCents: split.platformFeeCents,
+        netCents: split.sellerPayoutCents,
+        payoutStatus: "TBD", // Will be connected to payout status
+        createdAt: order.createdAt,
+      };
+    }),
   };
 }
 

@@ -104,6 +104,33 @@ const sellerDeliveryPath = path.join(dataDir, "seller-delivery-options.json");
 const productMetaPath = path.join(dataDir, "product-meta.json");
 const sellerShopProfilesPath = path.join(dataDir, "seller-shop-profiles.json");
 
+const CATEGORY_ALIASES: Record<string, string> = {
+  apparel: "Apparel",
+  apparell: "Apparel",
+  "bath & beauty": "Bath & Beauty",
+  "bath/beauty": "Bath & Beauty",
+  ceramics: "Ceramics",
+  "home decor": "Home",
+  "knitting & crochet": "Knitting & Crochet",
+  "knitting/crochet": "Knitting & Crochet",
+  "paper & party": "Paper & Party",
+  paper: "Paper & Party",
+  "pottery/ceramics": "Ceramics",
+};
+
+function normalizeCategoryLabel(category: string): string {
+  const trimmed = category.trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  return CATEGORY_ALIASES[trimmed.toLowerCase()] ?? trimmed;
+}
+
+function normalizeCategoryList(categories: string[]): string[] {
+  return [...new Set(categories.map(normalizeCategoryLabel).filter(Boolean))];
+}
+
 function toPence(value: number): number {
   if (!Number.isFinite(value)) return 0;
   return Math.max(0, Math.round(value));
@@ -168,23 +195,23 @@ export async function getSiteConfig(): Promise<SiteConfig> {
   const defaults: SiteConfig = {
     categories: [
       "Accessories",
-      "Apparell",
-      "Bath/Beauty",
+      "Apparel",
+      "Bath & Beauty",
       "Books",
       "Carving",
       "Food",
       "Home",
       "Jewellery",
-      "Knitting/Crochet",
+      "Knitting & Crochet",
       "Lino Prints",
       "Local",
       "Painting",
-      "Paper",
+      "Paper & Party",
       "Pets",
       "Photography",
       "Picture Frames",
       "Pictures",
-      "Pottery/Ceramics",
+      "Ceramics",
     ],
     deliveryOptions: [
       { id: "standard", name: "Standard Delivery", costPence: 399, enabled: true },
@@ -204,11 +231,9 @@ export async function getSiteConfig(): Promise<SiteConfig> {
   };
 
   const stored = await readJsonFile<Partial<SiteConfig>>(configPath, defaults);
-  const storedCategories = (stored.categories ?? defaults.categories).map((item) =>
-    item.trim().toLowerCase() === "home decor" ? "Home" : item,
-  );
+  const storedCategories = normalizeCategoryList(stored.categories ?? defaults.categories);
 
-  const requiredCategories = ["Apparell", "Food", "Local", "Pets", "Home"];
+  const requiredCategories = ["Apparel", "Food", "Local", "Pets", "Home"];
   for (const required of requiredCategories) {
     if (!storedCategories.some((item) => item.toLowerCase() === required.toLowerCase())) {
       storedCategories.push(required);
@@ -218,7 +243,7 @@ export async function getSiteConfig(): Promise<SiteConfig> {
   let merged: SiteConfig = {
     ...defaults,
     ...stored,
-    categories: [...new Set(storedCategories)],
+    categories: normalizeCategoryList(storedCategories),
     deliveryOptions: stored.deliveryOptions ?? defaults.deliveryOptions,
     maintenanceMode: stored.maintenanceMode ?? false,
     checkoutPaused: stored.checkoutPaused ?? false,
@@ -238,6 +263,9 @@ export async function getSiteConfig(): Promise<SiteConfig> {
     merged = { ...merged, maxActiveSellerAccounts: merged.pendingSellerLimitChange.value, pendingSellerLimitChange: null };
     needsResave = true;
   }
+  if (JSON.stringify(merged.categories) !== JSON.stringify(stored.categories ?? defaults.categories)) {
+    needsResave = true;
+  }
   if (needsResave) {
     await writeJsonFile(configPath, merged);
   }
@@ -246,7 +274,10 @@ export async function getSiteConfig(): Promise<SiteConfig> {
 }
 
 export async function saveSiteConfig(config: SiteConfig) {
-  await writeJsonFile(configPath, config);
+  await writeJsonFile(configPath, {
+    ...config,
+    categories: normalizeCategoryList(config.categories),
+  });
 }
 
 export async function getConfigHistory(): Promise<ConfigAuditEntry[]> {
@@ -325,9 +356,10 @@ export async function setProductMeta(productId: string, patch: ProductMeta) {
 }
 
 export async function setProductCategory(productId: string, category: string | undefined) {
+  const normalizedCategory = category ? normalizeCategoryLabel(category) : undefined;
   await setProductMeta(productId, {
-    category,
-    categories: category ? [category] : [],
+    category: normalizedCategory,
+    categories: normalizedCategory ? [normalizedCategory] : [],
   });
 }
 
@@ -377,7 +409,7 @@ export function getProductCategories(meta: ProductMeta | undefined): string[] {
 
   const fromArray = Array.isArray(meta.categories) ? meta.categories : [];
   const combined = [...fromArray, ...(meta.category ? [meta.category] : [])]
-    .map((value) => value.trim())
+    .map((value) => normalizeCategoryLabel(value))
     .filter((value) => value.length > 0);
 
   return [...new Set(combined)];
