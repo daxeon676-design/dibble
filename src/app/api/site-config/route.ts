@@ -9,5 +9,6 @@ export async function GET() {
     deliveryOptions: config.deliveryOptions.filter((opt) => opt.enabled),
     homepageTagline: config.homepageTagline,
     footerDescription: config.footerDescription,
+    platformFeePercent: config.platformFeePercent,
   });
 }

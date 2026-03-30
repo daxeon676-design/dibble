@@ -3,6 +3,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { appBaseUrl, sendEmail } from "@/lib/email";
 
 export type PayoutNotificationType =
   | "payout_pending"
@@ -90,16 +91,32 @@ async function sendPayoutEmail({
   amountCents?: number;
   failureReason?: string;
 }) {
-  // In production, integrate with Resend or SendGrid
-  // This is a placeholder for the email sending logic
-  const emailTemplates: Record<PayoutNotificationType, string> = {
-    payout_pending: `Hi ${name},\n\nYour payout of £${(amountCents! / 100).toFixed(2)} has been queued and will be processed within 3-5 business days.\n\nView your payout history: https://dibble.farm/seller`,
-    payout_processing: `Hi ${name},\n\nYour payout of £${(amountCents! / 100).toFixed(2)} is currently being processed.\n\nView your payout history: https://dibble.farm/seller`,
-    payout_succeeded: `Hi ${name},\n\nGreat news! Your payout of £${(amountCents! / 100).toFixed(2)} has been successfully delivered to your account.\n\nView your payout history: https://dibble.farm/seller`,
-    payout_failed: `Hi ${name},\n\nUnfortunately, your payout of £${(amountCents! / 100).toFixed(2)} failed due to: ${failureReason}\n\nPlease update your payout details or contact support: support@dibble.farm`,
-    payout_delayed: `Hi ${name},\n\nWe noticed your payout of £${(amountCents! / 100).toFixed(2)} is taking longer than usual. We're investigating and will have an update soon.\n\nContact support if needed: support@dibble.farm`,
+  const base = appBaseUrl();
+  const sellerLink = `${base}/seller`;
+  const supportEmail = process.env.SUPPORT_EMAIL ?? "support@dibblemarketplace.com";
+  const amount = amountCents !== undefined ? `£${(amountCents / 100).toFixed(2)}` : "your payout";
+
+  const subjectMap: Record<PayoutNotificationType, string> = {
+    payout_pending: "Your payout has been queued",
+    payout_processing: "Your payout is being processed",
+    payout_succeeded: "Your payout has been delivered",
+    payout_failed: "Your payout failed",
+    payout_delayed: "Your payout is delayed",
   };
 
-  console.log(`[EMAIL] To: ${email}\n${emailTemplates[type]}`);
-  // TODO: Integrate with actual email service
+  const bodyMap: Record<PayoutNotificationType, string> = {
+    payout_pending: `<p>Hi ${name},</p><p>Your payout of <strong>${amount}</strong> has been queued and will be processed within 3–5 business days.</p>`,
+    payout_processing: `<p>Hi ${name},</p><p>Your payout of <strong>${amount}</strong> is currently being processed.</p>`,
+    payout_succeeded: `<p>Hi ${name},</p><p>Great news! Your payout of <strong>${amount}</strong> has been successfully delivered to your account.</p>`,
+    payout_failed: `<p>Hi ${name},</p><p>Unfortunately, your payout of <strong>${amount}</strong> failed${failureReason ? `: ${failureReason}` : ""}.</p><p>Please update your payout details or <a href="mailto:${supportEmail}">contact support</a>.</p>`,
+    payout_delayed: `<p>Hi ${name},</p><p>Your payout of <strong>${amount}</strong> is taking longer than usual. We're investigating and will update you soon.</p><p>Need help? <a href="mailto:${supportEmail}">Contact support</a>.</p>`,
+  };
+
+  const html = `<!DOCTYPE html><html><body style="font-family:sans-serif;color:#333;max-width:520px;margin:auto;padding:24px">
+    ${bodyMap[type]}
+    <p><a href="${sellerLink}" style="display:inline-block;margin-top:12px;padding:10px 20px;background:#8B5C2A;color:#fff;border-radius:6px;text-decoration:none">View payout history</a></p>
+    <p style="margin-top:24px;font-size:12px;color:#999">Dibble Marketplace · <a href="mailto:${supportEmail}">${supportEmail}</a></p>
+  </body></html>`;
+
+  await sendEmail({ to: email, subject: subjectMap[type], html });
 }

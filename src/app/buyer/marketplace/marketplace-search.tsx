@@ -161,6 +161,8 @@ export default function MarketplaceSearch({
         <option value="price-asc">Price: Low to High</option>
         <option value="price-desc">Price: High to Low</option>
         <option value="name-asc">Name: A-Z</option>
+        <option value="rating-desc">Highest Rated</option>
+        <option value="most-reviewed">Most Reviewed</option>
       </select>
       <input type="number" step="0.01" min="0" value={min} onChange={(e) => setMin(e.target.value)} placeholder="Min £" className="rounded-md border border-(--accent-terra)/30 bg-white px-3 py-2 text-sm text-foreground" />
       <input type="number" step="0.01" min="0" value={max} onChange={(e) => setMax(e.target.value)} placeholder="Max £" className="rounded-md border border-(--accent-terra)/30 bg-white px-3 py-2 text-sm text-foreground" />

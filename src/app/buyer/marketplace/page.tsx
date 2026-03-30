@@ -102,6 +102,20 @@ export default async function BuyerMarketplacePage({
     ]),
   );
 
+  if (sortFilter === "rating-desc") {
+    products = [...products].sort((a, b) => {
+      const avgA = reviewSummaryByProductId.get(a.id)?.average ?? 0;
+      const avgB = reviewSummaryByProductId.get(b.id)?.average ?? 0;
+      return avgB - avgA;
+    });
+  } else if (sortFilter === "most-reviewed") {
+    products = [...products].sort((a, b) => {
+      const countA = reviewSummaryByProductId.get(a.id)?.count ?? 0;
+      const countB = reviewSummaryByProductId.get(b.id)?.count ?? 0;
+      return countB - countA;
+    });
+  }
+
   const buildCategoryHref = (nextCategory: string) => {
     const params = new URLSearchParams();
     if (query) params.set("q", query);

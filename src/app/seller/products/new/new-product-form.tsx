@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
-type ConfigResponse = { categories: string[] };
+type ConfigResponse = { categories: string[]; platformFeePercent?: number };
 
 type VariantDraft = {
   id: string;
@@ -24,6 +24,7 @@ export default function NewProductForm() {
   const [dimensions, setDimensions] = useState("");
   const [variants, setVariants] = useState<VariantDraft[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
+  const [feePercent, setFeePercent] = useState<number>(12);
   const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
   const [publishMode, setPublishMode] = useState<"now" | "draft" | "schedule">("now");
@@ -38,6 +39,9 @@ export default function NewProductForm() {
         setCategories(data.categories ?? []);
         if ((data.categories ?? []).length > 0) {
           setSelectedCategories([data.categories[0]]);
+        }
+        if (data.platformFeePercent !== undefined) {
+          setFeePercent(data.platformFeePercent);
         }
       });
   }, []);
@@ -156,17 +160,24 @@ export default function NewProductForm() {
       </label>
 
       <div className="grid gap-4 md:grid-cols-3">
-        <label className="block text-sm text-foreground">
-          <span>Price (£)</span>
-          <input
-            type="number"
-            min="0"
-            step="0.01"
-            value={price}
-            onChange={(event) => setPrice(event.target.value)}
-            className="mt-1 w-full rounded-md border border-(--accent-terra)/50 bg-white px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-(--accent-terra)"
-          />
-        </label>
+        <div className="block text-sm text-foreground">
+          <label className="block">
+            <span>Price (£)</span>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={price}
+              onChange={(event) => setPrice(event.target.value)}
+              className="mt-1 w-full rounded-md border border-(--accent-terra)/50 bg-white px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-(--accent-terra)"
+            />
+          </label>
+          {priceCents > 0 && (
+            <p className="mt-1 text-xs text-foreground/60">
+              You receive approx. <strong>£{((priceCents * (1 - feePercent / 100)) / 100).toFixed(2)}</strong> after {feePercent}% fee
+            </p>
+          )}
+        </div>
 
         <label className="block text-sm text-foreground">
           <span>Stock</span>
