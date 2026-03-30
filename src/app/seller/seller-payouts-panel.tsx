@@ -23,8 +23,6 @@ type PayoutStatus = {
   };
 };
 
-const PAYOUTS_UI_VERSION = "seller-payouts-ui-2026-03-30-4";
-
 async function getApiPayload(response: Response): Promise<{ url?: string; error?: string } | PayoutStatus | null> {
   const contentType = response.headers.get("content-type") ?? "";
 
@@ -237,9 +235,6 @@ export function SellerPayoutsPanel() {
           <h2 className="text-lg font-semibold text-(--accent-terra)">Seller Payouts</h2>
           <p className="mt-1 text-sm text-foreground/70">
             Connect Stripe once to receive payouts automatically when orders are paid.
-          </p>
-          <p className="mt-2 inline-block rounded bg-blue-100 px-2 py-0.5 text-xs font-mono font-semibold text-blue-800">
-            {PAYOUTS_UI_VERSION} — <a href="/api/seller/payouts/debug" target="_blank" rel="noopener" className="underline">stripe debug</a>
           </p>
         </div>
         <button
