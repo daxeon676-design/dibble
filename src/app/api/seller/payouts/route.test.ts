@@ -210,7 +210,7 @@ describe("seller payout profile validation", () => {
     const { POST } = await import("@/app/api/seller/payouts/route");
 
     const res = await POST(
-      new Request("http://localhost/api/seller/payouts", {
+      new Request("https://dibble.example/api/seller/payouts", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

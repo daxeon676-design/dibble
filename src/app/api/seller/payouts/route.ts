@@ -21,24 +21,32 @@ function withRouteVersion(message: string) {
 }
 
 function resolveAppUrl(request: Request) {
-  const configuredUrl =
-    process.env.NEXT_PUBLIC_SITE_URL ??
-    process.env.NEXTAUTH_URL ??
-    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null);
+  // Validate each candidate: skip any that are not parseable absolute URLs
+  // (guards against quoted values like `"https://..."` in env vars).
+  const candidates = [
+    process.env.NEXT_PUBLIC_SITE_URL,
+    process.env.NEXTAUTH_URL,
+    process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined,
+  ];
 
-  if (configuredUrl) {
-    return configuredUrl.replace(/\/$/, "");
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    try {
+      const parsed = new URL(candidate.trim());
+      return parsed.origin;
+    } catch {
+      // invalid — try next
+    }
   }
 
-  const forwardedProto = request.headers.get("x-forwarded-proto");
-  const forwardedHost = request.headers.get("x-forwarded-host");
-
-  if (forwardedProto && forwardedHost) {
-    return `${forwardedProto}://${forwardedHost}`;
+  // Derive from the incoming request URL (always correct on Vercel/production).
+  try {
+    return new URL(request.url).origin;
+  } catch {
+    const proto = request.headers.get("x-forwarded-proto") ?? "https";
+    const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? "localhost:3000";
+    return `${proto}://${host}`;
   }
-
-  const requestUrl = new URL(request.url);
-  return requestUrl.origin;
 }
 
 function isMissingStripeAccountError(error: unknown) {
