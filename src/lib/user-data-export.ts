@@ -3,6 +3,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { logApiEvent } from "@/lib/observability";
 
 export async function exportUserData(userId: string) {
   const user = await prisma.user.findUnique({
@@ -59,7 +60,7 @@ export async function scheduleUserDeletion(userId: string, delayDays: number = 3
   deletionDate.setDate(deletionDate.getDate() + delayDays);
 
   // Schedule deletion - in production, use a background job
-  console.log(`[SCHEDULED] User ${userId} for deletion on ${deletionDate.toISOString()}`);
+  logApiEvent("info", "user.deletion_scheduled", { userId, deletionDate: deletionDate.toISOString() });
 
   // Create notification
   await prisma.notification.create({
@@ -76,8 +77,7 @@ export async function scheduleUserDeletion(userId: string, delayDays: number = 3
 
 export async function cancelUserDeletion(userId: string) {
   // Remove deletion schedule - in production, cancel the scheduled job
-  console.log(`[CANCELLED] User deletion for ${userId}`);
-
+  logApiEvent("info", "user.deletion_cancelled", { userId });
   await prisma.notification.create({
     data: {
       userId,

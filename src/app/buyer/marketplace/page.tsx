@@ -12,11 +12,13 @@ import MarketplaceSearch from "./marketplace-search";
 export default async function BuyerMarketplacePage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; seller?: string; category?: string; sort?: string; min?: string; max?: string; local?: string; radius?: string }>;
+  searchParams: Promise<{ q?: string; seller?: string; category?: string; sort?: string; min?: string; max?: string; local?: string; radius?: string; page?: string }>;
 }) {
+  const PAGE_SIZE = 48;
+
   const session = await getServerSession(authOptions);
 
-  const { q, seller, category, sort, min, max, local, radius } = await searchParams;
+  const { q, seller, category, sort, min, max, local, radius, page } = await searchParams;
   const query = q?.trim() ?? "";
   const sellerFilter = seller?.trim() ?? "";
   const categoryFilter = category?.trim() ?? "";
@@ -25,6 +27,7 @@ export default async function BuyerMarketplacePage({
   const maxPounds = max?.trim() ?? "";
   const localFilter = local?.trim() ?? "";
   const radiusFilter = Math.max(0, Number(radius?.trim() ?? "0"));
+  const currentPage = Math.max(0, Number(page?.trim() ?? "0"));
 
   const config = await getSiteConfig();
 
@@ -92,6 +95,11 @@ export default async function BuyerMarketplacePage({
         _avg: { rating: true },
         _count: { _all: true },
       });
+  const totalFilteredCount = products.length;
+  const totalPages = Math.ceil(totalFilteredCount / PAGE_SIZE);
+  const safePage = Math.min(currentPage, Math.max(0, totalPages - 1));
+  products = products.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE);
+
   const reviewSummaryByProductId = new Map(
     reviewSummaries.map((summary) => [
       summary.productId,
@@ -125,6 +133,20 @@ export default async function BuyerMarketplacePage({
     if (maxPounds) params.set("max", maxPounds);
     if (localFilter) params.set("local", localFilter);
     if (radiusFilter > 0) params.set("radius", String(radiusFilter));
+    const qs = params.toString();
+    return qs ? `/buyer/marketplace?${qs}` : "/buyer/marketplace";
+  };
+
+  const buildPageHref = (targetPage: number) => {
+    const params = new URLSearchParams();
+    if (query) params.set("q", query);
+    if (categoryFilter) params.set("category", categoryFilter);
+    if (sortFilter && sortFilter !== "newest") params.set("sort", sortFilter);
+    if (minPounds) params.set("min", minPounds);
+    if (maxPounds) params.set("max", maxPounds);
+    if (localFilter) params.set("local", localFilter);
+    if (radiusFilter > 0) params.set("radius", String(radiusFilter));
+    if (targetPage > 0) params.set("page", String(targetPage));
     const qs = params.toString();
     return qs ? `/buyer/marketplace?${qs}` : "/buyer/marketplace";
   };
@@ -181,15 +203,19 @@ export default async function BuyerMarketplacePage({
       <p className="text-sm text-foreground/60 mb-4">
         {query ? (
           <>
-            Showing <strong className="text-foreground">{products.length}</strong> result
-            {products.length !== 1 && "s"} for &ldquo;{query}&rdquo;
+            Showing <strong className="text-foreground">{totalFilteredCount}</strong> result
+            {totalFilteredCount !== 1 && "s"} for &ldquo;{query}&rdquo;
+            {totalPages > 1 && ` · page ${safePage + 1} of ${totalPages}`}
             {" · "}
             <Link href="/buyer/marketplace" className="text-(--accent-terra) hover:underline">
               Clear
             </Link>
           </>
         ) : (
-          <>{products.length} product{products.length !== 1 && "s"} available</>
+          <>
+            {totalFilteredCount} product{totalFilteredCount !== 1 && "s"} available
+            {totalPages > 1 && ` · page ${safePage + 1} of ${totalPages}`}
+          </>
         )}
       </p>
 
@@ -288,6 +314,38 @@ export default async function BuyerMarketplacePage({
             );
           })}
         </div>
+      )}
+
+      {totalPages > 1 && (
+        <nav aria-label="Pagination" className="mt-10 flex items-center justify-center gap-3">
+          {safePage > 0 ? (
+            <Link
+              href={buildPageHref(safePage - 1)}
+              className="rounded-full border border-(--accent-terra)/40 px-5 py-2 text-sm text-(--accent-terra) hover:bg-(--accent-beige)/40 transition-colors"
+            >
+              ← Previous
+            </Link>
+          ) : (
+            <span className="rounded-full border border-(--accent-terra)/20 px-5 py-2 text-sm text-foreground/30 cursor-not-allowed">
+              ← Previous
+            </span>
+          )}
+          <span className="text-sm text-foreground/60">
+            {safePage + 1} / {totalPages}
+          </span>
+          {safePage < totalPages - 1 ? (
+            <Link
+              href={buildPageHref(safePage + 1)}
+              className="rounded-full border border-(--accent-terra)/40 px-5 py-2 text-sm text-(--accent-terra) hover:bg-(--accent-beige)/40 transition-colors"
+            >
+              Next →
+            </Link>
+          ) : (
+            <span className="rounded-full border border-(--accent-terra)/20 px-5 py-2 text-sm text-foreground/30 cursor-not-allowed">
+              Next →
+            </span>
+          )}
+        </nav>
       )}
     </main>
   );
