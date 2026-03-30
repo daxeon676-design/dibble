@@ -9,6 +9,8 @@ type CartData = {
     id: string;
     quantity: number;
     unitPriceCts: number;
+    variantId?: string | null;
+    variantLabel?: string | null;
     product: {
       id: string;
       title: string;
@@ -115,6 +117,7 @@ export function BuyerCartClient({ initialCart }: Props) {
               )}
               <div className="flex-1">
                 <h2 className="text-lg font-semibold">{item.product.title}</h2>
+                {item.variantLabel ? <p className="text-xs text-slate-400">Variant: {item.variantLabel}</p> : null}
                 <p className="text-sm text-slate-300">£{(item.unitPriceCts / 100).toFixed(2)} each</p>
                 <div className="mt-2 flex items-center gap-2">
                   <label className="text-sm">Qty</label>

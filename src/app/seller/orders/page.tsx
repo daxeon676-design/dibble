@@ -50,9 +50,14 @@ export default async function SellerOrdersPage() {
     <main className="mx-auto min-h-screen max-w-5xl px-6 py-16 text-slate-100">
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-3xl font-semibold">Seller Orders</h1>
-        <Link href="/seller" className="rounded-md border border-slate-700 px-3 py-2 text-sm">
-          Back to Seller Dashboard
-        </Link>
+        <div className="flex gap-2">
+          <Link href="/seller/returns" className="rounded-md border border-slate-700 px-3 py-2 text-sm">
+            Return Requests
+          </Link>
+          <Link href="/seller" className="rounded-md border border-slate-700 px-3 py-2 text-sm">
+            Back to Seller Dashboard
+          </Link>
+        </div>
       </div>
 
       <div className="space-y-4">
@@ -78,6 +83,8 @@ export default async function SellerOrdersPage() {
                   ? "Paid out"
                   : payout.status === "SPLIT_AT_CHARGE"
                     ? "Split at charge"
+                    : payout.status === "CANCELLED"
+                      ? "Cancelled after refund"
                     : "Awaiting manual payout";
 
               return <p className="text-sm text-slate-300">Payout status: {label}</p>;

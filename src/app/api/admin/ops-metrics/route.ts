@@ -5,6 +5,7 @@ import { z } from "zod";
 import { WebhookEventStatus } from "@/generated/prisma/enums";
 import { authOptions } from "@/lib/auth";
 import { evaluateOpsAlerts, getOpsAlertThresholds } from "@/lib/ops-alerts";
+import { getLastPendingPayoutAutoRetryReport } from "@/lib/pending-payout-auto-retry-store";
 import { prisma } from "@/lib/prisma";
 import { getSellerStripeAccountId } from "@/lib/site-config";
 import { listSellerPayouts } from "@/lib/seller-payout-ledger";
@@ -42,6 +43,7 @@ export async function GET(request: Request) {
     pendingPaymentOrders,
     recentWebhookFailures,
     payouts,
+    lastAutoRetryReport,
   ] = await Promise.all([
     prisma.stripeWebhookEvent.count({ where: { createdAt: { gte: since } } }),
     prisma.stripeWebhookEvent.count({
@@ -86,6 +88,7 @@ export async function GET(request: Request) {
       },
     }),
     listSellerPayouts(),
+    getLastPendingPayoutAutoRetryReport(),
   ]);
 
   const pendingPayouts = payouts.filter((entry) => entry.status === "PLATFORM_PENDING");
@@ -150,6 +153,7 @@ export async function GET(request: Request) {
       items: evaluatedAlerts.alerts,
       thresholds,
     },
+    pendingPayoutAutoRetry: lastAutoRetryReport,
     recentWebhookFailures,
   });
 }

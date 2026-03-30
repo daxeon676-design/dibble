@@ -6,7 +6,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { AddToCartButton } from "@/app/buyer/marketplace/product-card-actions";
 import { SavedItemButton } from "@/app/components/saved-item-button";
-import { getProductMetaMap, getSellerShopProfiles, getSiteConfig } from "@/lib/site-config";
+import { getProductCategories, getProductMetaMap, getSellerShopProfiles, getSiteConfig } from "@/lib/site-config";
 import MarketplaceSearch from "./marketplace-search";
 
 export default async function BuyerMarketplacePage({
@@ -53,8 +53,8 @@ export default async function BuyerMarketplacePage({
     getSellerShopProfiles(),
   ]);
   let products = productsRaw.filter((product) => {
-    const productCategory = meta[product.id]?.category ?? "";
-    if (categoryFilter && productCategory !== categoryFilter) {
+    const productCategories = getProductCategories(meta[product.id]);
+    if (categoryFilter && !productCategories.includes(categoryFilter)) {
       return false;
     }
 
@@ -172,57 +172,74 @@ export default async function BuyerMarketplacePage({
         </div>
       ) : (
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {products.map((product) => (
-            <article key={product.id} className="group rounded-xl border border-(--accent-terra)/15 bg-white shadow-sm hover:shadow-md transition-shadow overflow-hidden">
-              <Link href={`/products/${product.id}`} className="block">
-                {product.imageUrls[0] ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={product.imageUrls[0]}
-                    alt={product.title}
-                    className="h-44 w-full object-cover group-hover:opacity-95 transition-opacity"
-                  />
-                ) : (
-                  <div className="h-44 w-full bg-(--accent-beige)/40 flex items-center justify-center text-sm text-foreground/40">
-                    No image
-                  </div>
-                )}
-              </Link>
-              <div className="p-4 space-y-2">
+          {products.map((product) => {
+            const categoriesForCard = getProductCategories(meta[product.id]);
+            return (
+              <article key={product.id} className="group rounded-xl border border-(--accent-terra)/15 bg-white shadow-sm hover:shadow-md transition-shadow overflow-hidden">
                 <Link href={`/products/${product.id}`} className="block">
-                  <h2 className="font-semibold text-foreground leading-snug line-clamp-2 group-hover:text-(--accent-terra) transition-colors">
-                    {product.title}
-                  </h2>
-                </Link>
-                <Link href={`/shop/${product.seller.id}`} className="text-xs text-(--accent-green) hover:underline block truncate">
-                  {product.seller.displayName ?? product.seller.email}
-                </Link>
-                <p className="text-sm font-bold text-(--accent-terra)">£{(product.priceCents / 100).toFixed(2)}</p>
-                {session?.user ? (
-                  <>
-                    <AddToCartButton productId={product.id} />
-                    <div className="flex gap-2 flex-wrap pt-1">
-                      <SavedItemButton
-                        listType="wishlist"
-                        item={{ id: product.id, label: product.title, href: `/products/${product.id}` }}
-                      />
-                      <SavedItemButton
-                        listType="favourite-products"
-                        item={{ id: product.id, label: product.title, href: `/products/${product.id}` }}
-                      />
+                  {product.imageUrls[0] ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={product.imageUrls[0]}
+                      alt={product.title}
+                      className="h-44 w-full object-cover group-hover:opacity-95 transition-opacity"
+                    />
+                  ) : (
+                    <div className="h-44 w-full bg-(--accent-beige)/40 flex items-center justify-center text-sm text-foreground/40">
+                      No image
                     </div>
-                  </>
-                ) : (
-                  <Link
-                    href={`/login?callbackUrl=/products/${product.id}`}
-                    className="mt-1 inline-block rounded-full border border-(--accent-terra) px-3 py-1 text-xs font-medium text-(--accent-terra) hover:bg-(--accent-terra) hover:text-white transition-colors"
-                  >
-                    Sign in to buy
+                  )}
+                </Link>
+                <div className="p-4 space-y-2">
+                  <Link href={`/products/${product.id}`} className="block">
+                    <h2 className="font-semibold text-foreground leading-snug line-clamp-2 group-hover:text-(--accent-terra) transition-colors">
+                      {product.title}
+                    </h2>
                   </Link>
-                )}
-              </div>
-            </article>
-          ))}
+                  {categoriesForCard.length > 0 ? (
+                    <div className="flex flex-wrap gap-1">
+                      {categoriesForCard.slice(0, 3).map((cat) => (
+                        <span key={`${product.id}-${cat}`} className="rounded-full border border-(--accent-terra)/25 bg-(--accent-beige)/35 px-2 py-0.5 text-[10px] font-medium text-(--accent-terra)">
+                          {cat}
+                        </span>
+                      ))}
+                      {categoriesForCard.length > 3 ? (
+                        <span className="rounded-full border border-(--accent-terra)/25 px-2 py-0.5 text-[10px] font-medium text-foreground/60">
+                          +{categoriesForCard.length - 3}
+                        </span>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  <Link href={`/shop/${product.seller.id}`} className="text-xs text-(--accent-green) hover:underline block truncate">
+                    {product.seller.displayName ?? product.seller.email}
+                  </Link>
+                  <p className="text-sm font-bold text-(--accent-terra)">£{(product.priceCents / 100).toFixed(2)}</p>
+                  {session?.user ? (
+                    <>
+                      <AddToCartButton productId={product.id} />
+                      <div className="flex gap-2 flex-wrap pt-1">
+                        <SavedItemButton
+                          listType="wishlist"
+                          item={{ id: product.id, label: product.title, href: `/products/${product.id}` }}
+                        />
+                        <SavedItemButton
+                          listType="favourite-products"
+                          item={{ id: product.id, label: product.title, href: `/products/${product.id}` }}
+                        />
+                      </div>
+                    </>
+                  ) : (
+                    <Link
+                      href={`/login?callbackUrl=/products/${product.id}`}
+                      className="mt-1 inline-block rounded-full border border-(--accent-terra) px-3 py-1 text-xs font-medium text-(--accent-terra) hover:bg-(--accent-terra) hover:text-white transition-colors"
+                    >
+                      Sign in to buy
+                    </Link>
+                  )}
+                </div>
+              </article>
+            );
+          })}
         </div>
       )}
     </main>

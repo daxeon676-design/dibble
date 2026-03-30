@@ -7,7 +7,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Role } from "@/generated/prisma/enums";
 
-const APP_NAME = "Dibble Admin";
+const APP_NAME = "Dibble";
 
 /**
  * GET /api/auth/mfa/setup
@@ -18,9 +18,6 @@ export async function GET() {
   const session = await getServerSession(authOptions);
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  if (session.user.role !== Role.ADMIN) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const secret = generateSecret();
@@ -44,9 +41,6 @@ export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  if (session.user.role !== Role.ADMIN) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   let body: { code?: unknown; secret?: unknown };
@@ -86,23 +80,22 @@ export async function DELETE() {
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  if (session.user.role !== Role.ADMIN) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
 
-  const otherMfaAdmins = await prisma.user.count({
-    where: {
-      role: Role.ADMIN,
-      mfaEnabled: true,
-      id: { not: session.user.id },
-    },
-  });
+  if (session.user.role === Role.ADMIN) {
+    const otherMfaAdmins = await prisma.user.count({
+      where: {
+        role: Role.ADMIN,
+        mfaEnabled: true,
+        id: { not: session.user.id },
+      },
+    });
 
-  if (otherMfaAdmins === 0) {
-    return NextResponse.json(
-      { error: "Cannot disable MFA — you are the only admin with MFA enabled" },
-      { status: 409 }
-    );
+    if (otherMfaAdmins === 0) {
+      return NextResponse.json(
+        { error: "Cannot disable MFA — you are the only admin with MFA enabled" },
+        { status: 409 }
+      );
+    }
   }
 
   await prisma.user.update({

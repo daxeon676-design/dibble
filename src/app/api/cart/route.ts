@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 
 import { authOptions } from "@/lib/auth";
+import { getCartItemMetaMap } from "@/lib/cart-item-meta";
 import { prisma } from "@/lib/prisma";
 
 export async function GET() {
@@ -32,5 +33,21 @@ export async function GET() {
     },
   });
 
-  return NextResponse.json({ cart });
+  if (!cart) {
+    return NextResponse.json({ cart: null });
+  }
+
+  const metaByItemId = await getCartItemMetaMap(cart.items.map((item) => item.id));
+
+  const enrichedCart = {
+    ...cart,
+    items: cart.items.map((item) => ({
+      ...item,
+      variantId: metaByItemId[item.id]?.variantId ?? null,
+      variantLabel: metaByItemId[item.id]?.variantLabel ?? null,
+      variantPriceDeltaCents: metaByItemId[item.id]?.variantPriceDeltaCents ?? 0,
+    })),
+  };
+
+  return NextResponse.json({ cart: enrichedCart });
 }

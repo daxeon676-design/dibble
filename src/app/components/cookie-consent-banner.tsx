@@ -69,6 +69,15 @@ export default function CookieConsentBanner() {
 
     persistConsent(record);
     setVisible(false);
+
+    // Log server-side for auditable consent record (PECR compliance)
+    fetch("/api/consent/cookie", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ choice, version: CONSENT_VERSION }),
+    }).catch(() => {
+      // best-effort — local consent already persisted
+    });
   }
 
   return (

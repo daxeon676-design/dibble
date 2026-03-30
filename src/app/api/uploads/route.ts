@@ -3,8 +3,10 @@ import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { put } from "@vercel/blob";
 
 import { authOptions } from "@/lib/auth";
+import { logApiEvent } from "@/lib/observability";
 import { checkRateLimit } from "@/lib/rate-limit";
 
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
@@ -12,6 +14,7 @@ const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 const extensionByMime: Record<string, string> = {
   "image/png": "png",
   "image/jpeg": "jpg",
+  "image/jpg": "jpg",
   "image/webp": "webp",
   "image/gif": "gif",
 };
@@ -62,10 +65,44 @@ export async function POST(request: Request) {
   const ext = extensionByMime[file.type];
   const fileName = `${Date.now()}-${randomUUID()}.${ext}`;
 
-  const uploadDir = path.join(process.cwd(), "public", "uploads");
-  await fs.mkdir(uploadDir, { recursive: true });
-  const outputPath = path.join(uploadDir, fileName);
-  await fs.writeFile(outputPath, buffer);
+  try {
+    const uploadDir = path.join(process.cwd(), "public", "uploads");
+    await fs.mkdir(uploadDir, { recursive: true });
+    const outputPath = path.join(uploadDir, fileName);
+    await fs.writeFile(outputPath, buffer);
 
-  return NextResponse.json({ url: `/uploads/${fileName}` });
+    return NextResponse.json({ url: `/uploads/${fileName}` });
+  } catch (error) {
+    // Fallback for read-only file systems (common in serverless environments): store in Vercel Blob.
+    logApiEvent("warn", "uploads.post.filesystem_write_failed_attempt_blob", {
+      userId: session.user.id,
+      mimeType: file.type,
+      sizeBytes: file.size,
+      error: error instanceof Error ? error.message : String(error),
+    });
+
+    try {
+      const blob = await put(`uploads/${fileName}`, file, {
+        access: "public",
+        addRandomSuffix: false,
+      });
+
+      return NextResponse.json({ url: blob.url, storage: "blob" });
+    } catch (blobError) {
+      logApiEvent("error", "uploads.post.blob_fallback_failed", {
+        userId: session.user.id,
+        mimeType: file.type,
+        sizeBytes: file.size,
+        error: blobError instanceof Error ? blobError.message : String(blobError),
+      });
+
+      return NextResponse.json(
+        {
+          error:
+            "Image upload storage is unavailable. Configure Vercel Blob (BLOB_READ_WRITE_TOKEN) or retry later.",
+        },
+        { status: 500 },
+      );
+    }
+  }
 }

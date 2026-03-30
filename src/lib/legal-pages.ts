@@ -60,12 +60,12 @@ function getDefaultLegalPagesContent(): LegalPagesContent {
       subtitle: "A marketplace for handmade and craft products from local makers.",
       body:
         "Dibble helps independent makers, artists, and small craft studios sell directly to their local communities. From ceramics and prints to textiles, home decor, and gifts, our focus is quality handmade products with real stories behind them.\n\nOur mission is simple: make it easier for local creators to grow sustainable businesses and easier for buyers to discover meaningful, well-made products from nearby people.\n\nEvery shop on Dibble is run by a real person. We provide the tools for listings, payments, fulfillment updates, and customer communication so makers can spend more time creating and less time juggling admin.",
-      contactEmail: "hello@dibble.market",
+      contactEmail: "contact@dibblemarketplace.com",
     },
     faq: {
       title: "Frequently Asked Questions",
       intro: "Need help with something on Dibble? Start here.",
-      contactEmail: "hello@dibble.market",
+      contactEmail: "contact@dibblemarketplace.com",
       items: [
         {
           q: "What can I buy on Dibble?",
@@ -173,7 +173,7 @@ function getDefaultLegalPagesContent(): LegalPagesContent {
         },
         {
           heading: "10. Complaints and Contact",
-          body: "For privacy requests, contact privacy@dibble.market. You can also complain to the UK Information Commissioner's Office (ICO) if you believe your data has been handled unlawfully.",
+          body: "For privacy requests, contact contact@dibblemarketplace.com. You can also complain to the UK Information Commissioner's Office (ICO) if you believe your data has been handled unlawfully.",
         },
       ],
     },

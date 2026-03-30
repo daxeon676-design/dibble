@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 
 import { authOptions } from "@/lib/auth";
+import { getCartItemMetaMap } from "@/lib/cart-item-meta";
 import { prisma } from "@/lib/prisma";
 import { BuyerCartClient } from "@/app/buyer/cart/cart-client";
 
@@ -30,5 +31,19 @@ export default async function BuyerCartPage() {
     },
   });
 
-  return <BuyerCartClient initialCart={cart} />;
+  const metaByItemId = cart ? await getCartItemMetaMap(cart.items.map((item) => item.id)) : {};
+
+  const enrichedCart = cart
+    ? {
+        ...cart,
+        items: cart.items.map((item) => ({
+          ...item,
+          variantId: metaByItemId[item.id]?.variantId ?? null,
+          variantLabel: metaByItemId[item.id]?.variantLabel ?? null,
+          variantPriceDeltaCents: metaByItemId[item.id]?.variantPriceDeltaCents ?? 0,
+        })),
+      }
+    : null;
+
+  return <BuyerCartClient initialCart={enrichedCart} />;
 }

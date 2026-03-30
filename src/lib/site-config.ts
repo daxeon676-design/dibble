@@ -1,6 +1,9 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
+import { Role } from "@/generated/prisma/enums";
+import { prisma } from "@/lib/prisma";
+
 export type DeliveryOption = {
   id: string;
   name: string;
@@ -14,6 +17,25 @@ export type SellerDeliverySettings = {
   freeDeliveryThresholdPence: number;
 };
 
+export type PendingScheduledChange = {
+  value: number;
+  effectiveAt: string; // ISO date string
+};
+
+export type ConfigAuditEntry = {
+  savedAt: string;
+  savedBy: string;
+  config: SiteConfig;
+};
+
+export type ProductVariant = {
+  id: string;
+  label: string;
+  priceDeltaCents: number;
+  stockOverride?: number | null;
+  sku?: string | null;
+};
+
 export type SiteConfig = {
   categories: string[];
   deliveryOptions: DeliveryOption[];
@@ -23,14 +45,23 @@ export type SiteConfig = {
   supportEmail: string;
   allowNewSellerApplications: boolean;
   maxActiveSellerAccounts: number;
+  maintenanceMode: boolean;
+  checkoutPaused: boolean;
+  newAccountsPaused: boolean;
+  pendingFeeChange: PendingScheduledChange | null;
+  pendingSellerLimitChange: PendingScheduledChange | null;
 };
 
 type SellerDeliveryMap = Record<string, string[] | Partial<SellerDeliverySettings>>;
 type SellerDeliverySettingsMap = Record<string, SellerDeliverySettings>;
 export type ProductMeta = {
   category?: string;
+  categories?: string[];
   materials?: string;
   dimensions?: string;
+  draft?: boolean;
+  publishAt?: string;
+  variants?: ProductVariant[];
 };
 
 export type SellerShopProfile = {
@@ -43,6 +74,7 @@ export type SellerShopProfile = {
   localDiscoveryEnabled?: boolean;
   localDiscoveryLocation?: string;
   localDiscoveryRadiusMiles?: number;
+  verified?: boolean;
 };
 
 export type SellerPayoutMethod = "STRIPE_CONNECT" | "BANK_TRANSFER" | "PAYPAL" | "MANUAL_REVIEW";
@@ -67,11 +99,10 @@ type SellerPayoutProfileMap = Record<string, SellerPayoutProfile>;
 
 const dataDir = path.join(process.cwd(), "data");
 const configPath = path.join(dataDir, "site-config.json");
+const configHistoryPath = path.join(dataDir, "site-config-history.json");
 const sellerDeliveryPath = path.join(dataDir, "seller-delivery-options.json");
 const productMetaPath = path.join(dataDir, "product-meta.json");
 const sellerShopProfilesPath = path.join(dataDir, "seller-shop-profiles.json");
-const sellerStripeAccountsPath = path.join(dataDir, "seller-stripe-accounts.json");
-const sellerPayoutProfilesPath = path.join(dataDir, "seller-payout-profiles.json");
 
 function toPence(value: number): number {
   if (!Number.isFinite(value)) return 0;
@@ -161,10 +192,15 @@ export async function getSiteConfig(): Promise<SiteConfig> {
     ],
     homepageTagline: "Shop the latest handcrafted products from talented artists around the world.",
     footerDescription: "Shop the latest handcrafted products from talented artists around the world.",
-    platformFeePercent: 5,
-    supportEmail: "support@dibble.local",
+    platformFeePercent: 12,
+    supportEmail: "contact@dibblemarketplace.com",
     allowNewSellerApplications: true,
     maxActiveSellerAccounts: 250,
+    maintenanceMode: false,
+    checkoutPaused: false,
+    newAccountsPaused: false,
+    pendingFeeChange: null,
+    pendingSellerLimitChange: null,
   };
 
   const stored = await readJsonFile<Partial<SiteConfig>>(configPath, defaults);
@@ -179,16 +215,48 @@ export async function getSiteConfig(): Promise<SiteConfig> {
     }
   }
 
-  return {
+  let merged: SiteConfig = {
     ...defaults,
     ...stored,
     categories: [...new Set(storedCategories)],
     deliveryOptions: stored.deliveryOptions ?? defaults.deliveryOptions,
+    maintenanceMode: stored.maintenanceMode ?? false,
+    checkoutPaused: stored.checkoutPaused ?? false,
+    newAccountsPaused: stored.newAccountsPaused ?? false,
+    pendingFeeChange: stored.pendingFeeChange ?? null,
+    pendingSellerLimitChange: stored.pendingSellerLimitChange ?? null,
   };
+
+  // Apply any scheduled changes whose effective date has passed
+  const now = new Date();
+  let needsResave = false;
+  if (merged.pendingFeeChange && new Date(merged.pendingFeeChange.effectiveAt) <= now) {
+    merged = { ...merged, platformFeePercent: merged.pendingFeeChange.value, pendingFeeChange: null };
+    needsResave = true;
+  }
+  if (merged.pendingSellerLimitChange && new Date(merged.pendingSellerLimitChange.effectiveAt) <= now) {
+    merged = { ...merged, maxActiveSellerAccounts: merged.pendingSellerLimitChange.value, pendingSellerLimitChange: null };
+    needsResave = true;
+  }
+  if (needsResave) {
+    await writeJsonFile(configPath, merged);
+  }
+
+  return merged;
 }
 
 export async function saveSiteConfig(config: SiteConfig) {
   await writeJsonFile(configPath, config);
+}
+
+export async function getConfigHistory(): Promise<ConfigAuditEntry[]> {
+  return readJsonFile<ConfigAuditEntry[]>(configHistoryPath, []);
+}
+
+export async function appendConfigHistory(entry: ConfigAuditEntry): Promise<void> {
+  const history = await getConfigHistory();
+  const updated = [entry, ...history].slice(0, 25); // keep last 25 snapshots
+  await writeJsonFile(configHistoryPath, updated);
 }
 
 export async function getSellerDeliverySettingsMap(): Promise<SellerDeliverySettingsMap> {
@@ -257,7 +325,81 @@ export async function setProductMeta(productId: string, patch: ProductMeta) {
 }
 
 export async function setProductCategory(productId: string, category: string | undefined) {
-  await setProductMeta(productId, { category });
+  await setProductMeta(productId, {
+    category,
+    categories: category ? [category] : [],
+  });
+}
+
+export function normalizeProductVariants(input: ProductVariant[] | undefined): ProductVariant[] {
+  if (!Array.isArray(input)) {
+    return [];
+  }
+
+  const seen = new Set<string>();
+
+  return input
+    .map((variant) => ({
+      id: variant.id.trim(),
+      label: variant.label.trim(),
+      priceDeltaCents: Math.round(Number(variant.priceDeltaCents) || 0),
+      stockOverride:
+        variant.stockOverride === null || variant.stockOverride === undefined
+          ? null
+          : Math.max(0, Math.trunc(Number(variant.stockOverride))),
+      sku: variant.sku?.trim() || null,
+    }))
+    .filter((variant) => {
+      if (!variant.id || !variant.label || seen.has(variant.id)) {
+        return false;
+      }
+      seen.add(variant.id);
+      return true;
+    });
+}
+
+export function getProductVariants(meta: ProductMeta | undefined): ProductVariant[] {
+  return normalizeProductVariants(meta?.variants);
+}
+
+export function getProductVariant(meta: ProductMeta | undefined, variantId: string | null | undefined) {
+  if (!variantId) {
+    return null;
+  }
+
+  return getProductVariants(meta).find((variant) => variant.id === variantId) ?? null;
+}
+
+export function getProductCategories(meta: ProductMeta | undefined): string[] {
+  if (!meta) {
+    return [];
+  }
+
+  const fromArray = Array.isArray(meta.categories) ? meta.categories : [];
+  const combined = [...fromArray, ...(meta.category ? [meta.category] : [])]
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
+
+  return [...new Set(combined)];
+}
+
+export function isProductPublished(meta: ProductMeta | undefined, now = new Date()): boolean {
+  if (!meta) {
+    return true;
+  }
+
+  if (meta.draft) {
+    return false;
+  }
+
+  if (meta.publishAt) {
+    const publishAt = new Date(meta.publishAt);
+    if (!Number.isNaN(publishAt.getTime()) && publishAt.getTime() > now.getTime()) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 export async function getSellerShopProfiles(): Promise<SellerShopProfileMap> {
@@ -276,36 +418,127 @@ export async function setSellerShopProfile(sellerId: string, patch: SellerShopPr
 }
 
 export async function getSellerStripeAccountMap(): Promise<SellerStripeAccountMap> {
-  return readJsonFile<SellerStripeAccountMap>(sellerStripeAccountsPath, {});
+  const sellers = await prisma.user.findMany({
+    where: {
+      role: Role.SELLER,
+      stripeConnectAccountId: { not: null },
+    },
+    select: {
+      id: true,
+      stripeConnectAccountId: true,
+    },
+  });
+
+  return Object.fromEntries(
+    sellers
+      .filter((seller) => Boolean(seller.stripeConnectAccountId))
+      .map((seller) => [seller.id, seller.stripeConnectAccountId as string]),
+  );
 }
 
 export async function getSellerStripeAccountId(sellerId: string): Promise<string | null> {
-  const map = await getSellerStripeAccountMap();
-  const accountId = map[sellerId];
+  const seller = await prisma.user.findUnique({
+    where: { id: sellerId },
+    select: { stripeConnectAccountId: true },
+  });
+  const accountId = seller?.stripeConnectAccountId ?? null;
   return accountId && accountId.startsWith("acct_") ? accountId : null;
 }
 
-export async function setSellerStripeAccountId(sellerId: string, accountId: string) {
-  const map = await getSellerStripeAccountMap();
-  map[sellerId] = accountId;
-  await writeJsonFile(sellerStripeAccountsPath, map);
+export async function setSellerStripeAccountId(sellerId: string, accountId: string | null) {
+  await prisma.user.update({
+    where: { id: sellerId },
+    data: {
+      stripeConnectAccountId: accountId,
+      payoutUpdatedAt: new Date(),
+    },
+  });
 }
 
 export async function getSellerPayoutProfiles(): Promise<SellerPayoutProfileMap> {
-  return readJsonFile<SellerPayoutProfileMap>(sellerPayoutProfilesPath, {});
+  const sellers = await prisma.user.findMany({
+    where: { role: Role.SELLER },
+    select: {
+      id: true,
+      payoutMethod: true,
+      payoutPayeeName: true,
+      payoutEmail: true,
+      payoutBankName: true,
+      payoutBankAccountLast4: true,
+      payoutBankSortCodeLast2: true,
+      payoutPaypalEmail: true,
+      payoutNotes: true,
+      payoutAdminNotes: true,
+      payoutUpdatedAt: true,
+    },
+  });
+
+  const map: SellerPayoutProfileMap = {};
+  for (const seller of sellers) {
+    map[seller.id] = {
+      method: (seller.payoutMethod as SellerPayoutMethod | null) ?? undefined,
+      payeeName: seller.payoutPayeeName ?? undefined,
+      payoutEmail: seller.payoutEmail ?? undefined,
+      bankName: seller.payoutBankName ?? undefined,
+      bankAccountLast4: seller.payoutBankAccountLast4 ?? undefined,
+      bankSortCodeLast2: seller.payoutBankSortCodeLast2 ?? undefined,
+      paypalEmail: seller.payoutPaypalEmail ?? undefined,
+      notes: seller.payoutNotes ?? undefined,
+      adminNotes: seller.payoutAdminNotes ?? undefined,
+      updatedAt: seller.payoutUpdatedAt?.toISOString(),
+    };
+  }
+
+  return map;
 }
 
 export async function getSellerPayoutProfile(sellerId: string): Promise<SellerPayoutProfile> {
-  const profiles = await getSellerPayoutProfiles();
-  return profiles[sellerId] ?? {};
+  const seller = await prisma.user.findUnique({
+    where: { id: sellerId },
+    select: {
+      payoutMethod: true,
+      payoutPayeeName: true,
+      payoutEmail: true,
+      payoutBankName: true,
+      payoutBankAccountLast4: true,
+      payoutBankSortCodeLast2: true,
+      payoutPaypalEmail: true,
+      payoutNotes: true,
+      payoutAdminNotes: true,
+      payoutUpdatedAt: true,
+    },
+  });
+
+  if (!seller) return {};
+
+  return {
+    method: (seller.payoutMethod as SellerPayoutMethod | null) ?? undefined,
+    payeeName: seller.payoutPayeeName ?? undefined,
+    payoutEmail: seller.payoutEmail ?? undefined,
+    bankName: seller.payoutBankName ?? undefined,
+    bankAccountLast4: seller.payoutBankAccountLast4 ?? undefined,
+    bankSortCodeLast2: seller.payoutBankSortCodeLast2 ?? undefined,
+    paypalEmail: seller.payoutPaypalEmail ?? undefined,
+    notes: seller.payoutNotes ?? undefined,
+    adminNotes: seller.payoutAdminNotes ?? undefined,
+    updatedAt: seller.payoutUpdatedAt?.toISOString(),
+  };
 }
 
 export async function setSellerPayoutProfile(sellerId: string, patch: SellerPayoutProfile) {
-  const profiles = await getSellerPayoutProfiles();
-  profiles[sellerId] = {
-    ...(profiles[sellerId] ?? {}),
-    ...patch,
-    updatedAt: new Date().toISOString(),
-  };
-  await writeJsonFile(sellerPayoutProfilesPath, profiles);
+  await prisma.user.update({
+    where: { id: sellerId },
+    data: {
+      payoutMethod: patch.method,
+      payoutPayeeName: patch.payeeName,
+      payoutEmail: patch.payoutEmail,
+      payoutBankName: patch.bankName,
+      payoutBankAccountLast4: patch.bankAccountLast4,
+      payoutBankSortCodeLast2: patch.bankSortCodeLast2,
+      payoutPaypalEmail: patch.paypalEmail,
+      payoutNotes: patch.notes,
+      payoutAdminNotes: patch.adminNotes,
+      payoutUpdatedAt: new Date(),
+    },
+  });
 }

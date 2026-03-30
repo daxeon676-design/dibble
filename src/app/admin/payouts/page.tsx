@@ -297,6 +297,9 @@ export default async function AdminPayoutsPage({
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-3xl font-semibold">Seller Payout Queue</h1>
         <div className="flex flex-wrap items-center gap-2">
+          <Link href="/admin/payouts/manual" className="rounded-md border border-slate-700 px-3 py-2 text-sm">
+            Manual Seller Payout
+          </Link>
           <Link
             href={`/api/admin/payouts?${exportQuery.toString()}`}
             className="rounded-md border border-slate-700 px-3 py-2 text-sm"
@@ -587,7 +590,12 @@ export default async function AdminPayoutsPage({
           {completed.length === 0 ? <p className="text-sm text-slate-400">No completed payout records yet.</p> : null}
           {completed.map((entry) => {
             const sellerName = sellerById.get(entry.sellerId) ?? entry.sellerId;
-            const modeLabel = entry.status === "SPLIT_AT_CHARGE" ? "Split at charge" : "Paid out";
+            const modeLabel =
+              entry.status === "SPLIT_AT_CHARGE"
+                ? "Split at charge"
+                : entry.status === "CANCELLED"
+                  ? "Cancelled after refund"
+                  : "Paid out";
             return (
               <article key={entry.orderId} className="rounded-lg border border-slate-700 bg-slate-950 p-3 text-sm">
                 <div className="flex flex-wrap items-start justify-between gap-3">

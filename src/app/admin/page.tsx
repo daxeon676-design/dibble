@@ -5,11 +5,26 @@ import { redirect } from "next/navigation";
 import { DisputeStatus, OrderStatus, PaymentStatus, Role, SellerApplicationStatus } from "@/generated/prisma/enums";
 import { authOptions } from "@/lib/auth";
 import { getLaunchReadiness } from "@/lib/launch-readiness";
+import { evaluateOpsAlerts } from "@/lib/ops-alerts";
 import { prisma } from "@/lib/prisma";
 import { getSystemHealth } from "@/lib/system-health";
 import { getSiteConfig } from "@/lib/site-config";
 import { ReviewActions } from "@/app/admin/review-actions";
 import { DeleteReviewButton } from "@/app/admin/delete-review-button";
+
+function trendArrow(current: number, previous: number) {
+  if (previous === 0) return current > 0 ? "↑" : "–";
+  const pct = Math.round(((current - previous) / previous) * 100);
+  if (pct > 0) return `↑${pct}%`;
+  if (pct < 0) return `↓${Math.abs(pct)}%`;
+  return "–";
+}
+
+function trendColor(current: number, previous: number, higherIsBetter = true) {
+  if (previous === 0) return "text-slate-400";
+  const better = current > previous;
+  return better === higherIsBetter ? "text-emerald-400" : "text-red-400";
+}
 
 export default async function AdminDashboardPage() {
   const session = await getServerSession(authOptions);
@@ -21,6 +36,12 @@ export default async function AdminDashboardPage() {
   if (session.user.role !== Role.ADMIN) {
     redirect("/buyer");
   }
+
+  const now = new Date();
+  const d7 = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const d14 = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
+  const d24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const staleOrderCutoff = new Date(now.getTime() - 15 * 60 * 1000);
 
   const [
     pendingApplications,
@@ -34,6 +55,19 @@ export default async function AdminDashboardPage() {
     paymentsAgg,
     topSellerPayments,
     recentReviews,
+    // trend: current 7-day window
+    gmv7d,
+    orders7d,
+    newUsers7d,
+    // trend: prior 7-day window
+    gmvPrev7d,
+    ordersPrev7d,
+    newUsersPrev7d,
+    // ops alert inputs
+    paymentFailed24h,
+    paymentSucceeded24h,
+    webhookFailed24h,
+    stalePendingOrders,
   ] = await Promise.all([
     prisma.sellerApplication.findMany({
       where: { status: SellerApplicationStatus.PENDING },
@@ -87,6 +121,29 @@ export default async function AdminDashboardPage() {
       include: {
         product: { select: { id: true, title: true } },
         buyer: { select: { displayName: true, email: true } },
+      },
+    }),
+    // 7d trends
+    prisma.payment.aggregate({
+      _sum: { amountCents: true },
+      where: { status: PaymentStatus.SUCCEEDED, createdAt: { gte: d7 } },
+    }),
+    prisma.order.count({ where: { createdAt: { gte: d7 } } }),
+    prisma.user.count({ where: { createdAt: { gte: d7 } } }),
+    prisma.payment.aggregate({
+      _sum: { amountCents: true },
+      where: { status: PaymentStatus.SUCCEEDED, createdAt: { gte: d14, lt: d7 } },
+    }),
+    prisma.order.count({ where: { createdAt: { gte: d14, lt: d7 } } }),
+    prisma.user.count({ where: { createdAt: { gte: d14, lt: d7 } } }),
+    // ops alert inputs
+    prisma.payment.count({ where: { status: PaymentStatus.FAILED, createdAt: { gte: d24h } } }),
+    prisma.payment.count({ where: { status: PaymentStatus.SUCCEEDED, createdAt: { gte: d24h } } }),
+    prisma.stripeWebhookEvent.count({ where: { status: "FAILED", createdAt: { gte: d24h } } }),
+    prisma.order.count({
+      where: {
+        status: OrderStatus.PENDING_PAYMENT,
+        createdAt: { lt: staleOrderCutoff },
       },
     }),
   ]);
@@ -147,6 +204,31 @@ export default async function AdminDashboardPage() {
     ? Math.round((totalSellers / siteConfig.maxActiveSellerAccounts) * 100)
     : 0;
 
+  // ── Ops alerts ────────────────────────────────────────────────────────────
+  const { alerts: opsAlerts } = evaluateOpsAlerts({
+    paymentFailed: paymentFailed24h,
+    paymentSucceeded: paymentSucceeded24h,
+    webhookFailed: webhookFailed24h,
+    webhookStaleProcessing: 0,
+    stalePendingOrders,
+    pendingPayoutCount: 0,
+    pendingPayoutTotalCents: 0,
+    pendingWithoutConnect: 0,
+  });
+  // Filter out the synthetic "all-clear" info entry — only surface real issues
+  const actionableAlerts = opsAlerts.filter((a) => a.severity !== "info");
+
+  // ── Trend values ──────────────────────────────────────────────────────────
+  const gmv7dCents = gmv7d._sum.amountCents ?? 0;
+  const gmvPrev7dCents = gmvPrev7d._sum.amountCents ?? 0;
+
+  // ── Active operational flags ───────────────────────────────────────────────
+  const activeFlags = [
+    siteConfig.maintenanceMode && "Maintenance mode ON",
+    siteConfig.checkoutPaused && "Checkout paused",
+    siteConfig.newAccountsPaused && "Registrations paused",
+  ].filter(Boolean) as string[];
+
   return (
     <main className="mx-auto min-h-screen max-w-6xl px-6 py-16 text-slate-100">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -173,8 +255,14 @@ export default async function AdminDashboardPage() {
           <Link href="/admin/disputes" className="rounded-md border border-slate-700 px-3 py-2 text-sm">
             Disputes
           </Link>
+          <Link href="/admin/returns" className="rounded-md border border-slate-700 px-3 py-2 text-sm">
+            Returns
+          </Link>
           <Link href="/admin/users-support" className="rounded-md border border-slate-700 px-3 py-2 text-sm">
             Users &amp; Support
+          </Link>
+          <Link href="/admin/coupons" className="rounded-md border border-slate-700 px-3 py-2 text-sm">
+            Coupons
           </Link>
           <Link href="/admin/security" className="rounded-md border border-slate-700 px-3 py-2 text-sm">
             Security &amp; Audit
@@ -185,22 +273,70 @@ export default async function AdminDashboardPage() {
         </div>
       </div>
 
+      {/* ── Active operational flags banner ───────────────────────────────── */}
+      {activeFlags.length > 0 ? (
+        <div className="mt-4 flex items-center gap-3 rounded-md border border-red-700 bg-red-900/40 px-4 py-3 text-sm font-medium text-red-200">
+          <span className="text-red-400">⚠</span>
+          Active controls: {activeFlags.join(" · ")}
+          <Link href="/admin/site-settings" className="ml-auto text-xs text-red-300 underline">Manage</Link>
+        </div>
+      ) : null}
+
+      {/* ── Ops alert panel ───────────────────────────────────────────────── */}
+      {actionableAlerts.length > 0 ? (
+        <section className="mt-4 space-y-2">
+          {actionableAlerts.map((alert) => (
+            <div
+              key={alert.id}
+              className={`flex items-center justify-between gap-3 rounded-md border px-4 py-2 text-sm ${
+                alert.severity === "critical"
+                  ? "border-red-700 bg-red-900/40 text-red-200"
+                  : "border-amber-700 bg-amber-900/30 text-amber-200"
+              }`}
+            >
+              <span>
+                <span className="mr-2">{alert.severity === "critical" ? "🔴" : "🟡"}</span>
+                {alert.message}
+                {" — "}
+                <span className="font-semibold">
+                  {alert.id === "payment-failure-rate"
+                    ? `${(alert.value * 100).toFixed(1)}%`
+                    : alert.value}
+                </span>
+              </span>
+              <Link href="/admin/ops" className="shrink-0 text-xs underline opacity-80 hover:opacity-100">
+                View in Ops
+              </Link>
+            </div>
+          ))}
+        </section>
+      ) : null}
+
       <section className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <article className="rounded-md border border-slate-800 bg-slate-900 p-4">
           <p className="text-xs uppercase tracking-wide text-slate-400">GMV (Succeeded Payments)</p>
           <p className="mt-2 text-2xl font-semibold text-emerald-300">
             £{((paymentsAgg._sum.amountCents ?? 0) / 100).toFixed(2)}
           </p>
+          <p className={`mt-1 text-xs ${trendColor(gmv7dCents, gmvPrev7dCents)}`}>
+            7d: £{(gmv7dCents / 100).toFixed(2)} {trendArrow(gmv7dCents, gmvPrev7dCents)} vs prior week
+          </p>
         </article>
         <article className="rounded-md border border-slate-800 bg-slate-900 p-4">
           <p className="text-xs uppercase tracking-wide text-slate-400">Users</p>
           <p className="mt-2 text-2xl font-semibold">{totalUsers}</p>
           <p className="mt-1 text-xs text-slate-400">Buyers: {totalBuyers} | Sellers: {totalSellers}</p>
+          <p className={`mt-1 text-xs ${trendColor(newUsers7d, newUsersPrev7d)}`}>
+            7d new: {newUsers7d} {trendArrow(newUsers7d, newUsersPrev7d)} vs prior week
+          </p>
         </article>
         <article className="rounded-md border border-slate-800 bg-slate-900 p-4">
           <p className="text-xs uppercase tracking-wide text-slate-400">Orders</p>
           <p className="mt-2 text-2xl font-semibold">{totalOrders}</p>
           <p className="mt-1 text-xs text-slate-400">Open pipeline: {orderInFlight}</p>
+          <p className={`mt-1 text-xs ${trendColor(orders7d, ordersPrev7d)}`}>
+            7d: {orders7d} {trendArrow(orders7d, ordersPrev7d)} vs prior week
+          </p>
         </article>
         <article className="rounded-md border border-slate-800 bg-slate-900 p-4">
           <p className="text-xs uppercase tracking-wide text-slate-400">Catalog</p>
@@ -283,6 +419,22 @@ export default async function AdminDashboardPage() {
               <h2 className="text-lg font-semibold">{application.shopName}</h2>
               <p className="mt-1 text-sm text-slate-300">Applicant: {application.user.displayName ?? application.user.email}</p>
               <p className="mt-2 text-sm text-slate-400">{application.description}</p>
+              {application.businessType ? (
+                <p className="mt-1 text-sm text-slate-400"><span className="text-slate-500">Business type:</span> {application.businessType.replace("_", " ")}</p>
+              ) : null}
+              {application.businessAddress ? (
+                <p className="mt-1 text-sm text-slate-400"><span className="text-slate-500">Address:</span> {application.businessAddress}</p>
+              ) : null}
+              {application.vatNumber ? (
+                <p className="mt-1 text-sm text-slate-400"><span className="text-slate-500">VAT number:</span> {application.vatNumber}</p>
+              ) : null}
+              {application.planToSell ? (
+                <p className="mt-1 text-sm text-slate-400"><span className="text-slate-500">Plans to sell:</span> {application.planToSell}</p>
+              ) : null}
+              <p className="mt-1 text-xs text-slate-500">
+                Terms accepted: {application.sellerTermsAcceptedAt ? new Date(application.sellerTermsAcceptedAt).toLocaleDateString("en-GB") : "Not recorded"}
+                {" · "}18+: {application.confirmedAdult ? "Confirmed" : "Not confirmed"}
+              </p>
               <ReviewActions applicationId={application.id} />
               <p className="mt-2 text-xs text-slate-500">Application ID: {application.id}</p>
             </article>

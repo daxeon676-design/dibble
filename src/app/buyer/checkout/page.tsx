@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 
 import { authOptions } from "@/lib/auth";
+import { getCartItemMetaMap } from "@/lib/cart-item-meta";
 import { calculateOrderTotalCents, groupCartItemsBySeller } from "@/lib/checkout";
 import { prisma } from "@/lib/prisma";
 import { CheckoutClient } from "./checkout-client";
@@ -10,6 +11,7 @@ import {
   getSellerDeliverySettingsMap,
   resolveSellerDeliveryCostPence,
 } from "@/lib/site-config";
+import { getOrCreateStripeCustomer, stripe } from "@/lib/stripe";
 
 export default async function CheckoutPage() {
   const session = await getServerSession(authOptions);
@@ -40,13 +42,24 @@ export default async function CheckoutPage() {
     redirect("/buyer/cart?error=empty");
   }
 
+  const cartMetaByItemId = await getCartItemMetaMap(cart.items.map((item) => item.id));
+  const enrichedCart = {
+    ...cart,
+    items: cart.items.map((item) => ({
+      ...item,
+      variantId: cartMetaByItemId[item.id]?.variantId ?? null,
+      variantLabel: cartMetaByItemId[item.id]?.variantLabel ?? null,
+      variantPriceDeltaCents: cartMetaByItemId[item.id]?.variantPriceDeltaCents ?? 0,
+    })),
+  };
+
   const [config, sellerDeliveryMap] = await Promise.all([
     getSiteConfig(),
     getSellerDeliverySettingsMap(),
   ]);
 
   const enabledOptions = config.deliveryOptions.filter((option) => option.enabled);
-  const groupedItems = groupCartItemsBySeller(cart.items);
+  const groupedItems = groupCartItemsBySeller(enrichedCart.items);
 
   const deliveryOptions = enabledOptions.map((option) => {
     let costPence = 0;
@@ -98,11 +111,39 @@ export default async function CheckoutPage() {
     }),
   ]);
 
+  let savedPaymentMethods: Array<{ id: string; brand: string; last4: string; expMonth: number; expYear: number }> = [];
+
+  if (stripe && session.user.email) {
+    const customer = await getOrCreateStripeCustomer({
+      userId: session.user.id,
+      email: session.user.email,
+      name: session.user.name,
+    });
+
+    if (customer?.id) {
+      const cards = await stripe.paymentMethods.list({
+        customer: customer.id,
+        type: "card",
+        limit: 10,
+      });
+      savedPaymentMethods = cards.data
+        .filter((pm) => pm.card)
+        .map((pm) => ({
+          id: pm.id,
+          brand: pm.card?.brand ?? "card",
+          last4: pm.card?.last4 ?? "****",
+          expMonth: pm.card?.exp_month ?? 0,
+          expYear: pm.card?.exp_year ?? 0,
+        }));
+    }
+  }
+
   return (
     <CheckoutClient
-      initialCart={cart}
+      initialCart={enrichedCart}
       initialUser={user}
       initialSavedAddresses={savedAddresses}
+      initialSavedPaymentMethods={savedPaymentMethods}
       deliveryOptions={deliveryOptions}
     />
   );

@@ -40,7 +40,7 @@ export default async function SellerShopPage({
         bio: true,
         avatarUrl: true,
         createdAt: true,
-        sellerApplication: { select: { shopName: true, description: true } },
+        sellerApplication: { select: { shopName: true, description: true, businessAddress: true, businessType: true } },
       },
     }),
     getSellerShopProfile(sellerId),
@@ -123,7 +123,14 @@ export default async function SellerShopPage({
           </div>
         )}
         <div>
-          <h1 className="text-2xl font-bold text-(--accent-terra)">{shopName}</h1>
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-2xl font-bold text-(--accent-terra)">{shopName}</h1>
+            {shopProfile.verified ? (
+              <span className="rounded-full border border-emerald-600/30 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
+                Verified seller
+              </span>
+            ) : null}
+          </div>
           {shopDesc && <p className="mt-1 max-w-xl text-foreground/80">{shopDesc}</p>}
           {shopProfile.headline ? <p className="mt-2 text-sm text-(--accent-green)">{shopProfile.headline}</p> : null}
           <p className="mt-1 text-xs text-foreground/60">
@@ -153,6 +160,11 @@ export default async function SellerShopPage({
               Message Seller
             </a>
           </div>
+          {seller.sellerApplication?.businessAddress ? (
+            <p className="mt-3 text-xs text-foreground/50">
+              Trading address: {seller.sellerApplication.businessAddress}
+            </p>
+          ) : null}
         </div>
       </div>
 

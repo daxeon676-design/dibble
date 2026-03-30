@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { Role, SellerApplicationStatus } from "@/generated/prisma/enums";
 import { authOptions } from "@/lib/auth";
+import { verifyTurnstileToken } from "@/lib/human-verification";
 import { prisma } from "@/lib/prisma";
 import { getSiteConfig } from "@/lib/site-config";
 import { checkRateLimit } from "@/lib/rate-limit";
@@ -11,6 +12,13 @@ import { checkRateLimit } from "@/lib/rate-limit";
 const createApplicationSchema = z.object({
   shopName: z.string().trim().min(3).max(80),
   description: z.string().trim().min(20).max(1000),
+  businessType: z.enum(["sole_trader", "limited_company", "partnership", "individual"]),
+  businessAddress: z.string().trim().min(5).max(300),
+  vatNumber: z.string().trim().max(20).optional(),
+  planToSell: z.string().trim().min(10).max(500),
+  sellerTermsAccepted: z.literal(true, { error: "You must accept the Seller Terms & Conditions." }),
+  confirmedAdult: z.literal(true, { error: "You must confirm you are 18 or older." }),
+  humanVerificationToken: z.string().min(1),
 });
 
 export async function GET() {
@@ -80,6 +88,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid application payload." }, { status: 400 });
   }
 
+  if (!process.env.TURNSTILE_SECRET_KEY) {
+    return NextResponse.json(
+      { error: "Human verification is not configured. Please try again later." },
+      { status: 503 },
+    );
+  }
+
+  const isHuman = await verifyTurnstileToken(request, parsed.data.humanVerificationToken);
+  if (!isHuman) {
+    return NextResponse.json({ error: "Human verification failed. Please try again." }, { status: 400 });
+  }
+
   const existing = await prisma.sellerApplication.findUnique({ where: { userId: session.user.id } });
   if (existing) {
     return NextResponse.json({ error: "You already submitted a seller application." }, { status: 409 });
@@ -104,6 +124,12 @@ export async function POST(request: Request) {
         userId: session.user.id,
         shopName: parsed.data.shopName,
         description: parsed.data.description,
+        businessType: parsed.data.businessType,
+        businessAddress: parsed.data.businessAddress,
+        vatNumber: parsed.data.vatNumber,
+        planToSell: parsed.data.planToSell,
+        sellerTermsAcceptedAt: new Date(),
+        confirmedAdult: true,
         status: SellerApplicationStatus.PENDING,
       },
       select: {

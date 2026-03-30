@@ -2,7 +2,10 @@ import { NextResponse } from "next/server";
 
 import { logApiEvent } from "@/lib/observability";
 import { dispatchOpsAlert } from "@/lib/ops-alert-dispatcher";
+import { runPendingPayoutAutoRetry } from "@/lib/pending-payout-auto-retry";
+import { savePendingPayoutAutoRetryReport } from "@/lib/pending-payout-auto-retry-store";
 import { reconcileSellerPayouts } from "@/lib/payout-reconciliation";
+import { runProductRenewalChecks } from "@/lib/product-renewal";
 import { saveReconciliationReport } from "@/lib/reconciliation-report-store";
 
 function isAuthorized(request: Request) {
@@ -22,6 +25,23 @@ function isVercelCronAuthorized(request: Request) {
 }
 
 async function runReconciliation() {
+  // Product renewal: notifications + auto-expiry
+  const renewal = await runProductRenewalChecks();
+  logApiEvent("info", "ops.daily_reconciliation.product_renewal", {
+    notified: renewal.notified,
+    autoExpired: renewal.autoExpired,
+  });
+
+  // Retry pending payouts for sellers who completed Connect since original order.
+  const retryLimit = Number(process.env.OPS_PENDING_PAYOUT_RETRY_LIMIT ?? "25");
+  const pendingRetry = await runPendingPayoutAutoRetry(Number.isFinite(retryLimit) ? retryLimit : 25);
+  logApiEvent("info", "ops.daily_reconciliation.payout_auto_retry", pendingRetry);
+  await savePendingPayoutAutoRetryReport({
+    generatedAt: new Date().toISOString(),
+    source: "cron",
+    ...pendingRetry,
+  });
+
   const result = await reconcileSellerPayouts();
   await saveReconciliationReport({
     generatedAt: result.generatedAt,

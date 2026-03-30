@@ -6,7 +6,7 @@ import { Role } from "@/generated/prisma/enums";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { SellerProductsManager } from "@/app/seller/products/products-manager";
-import { getProductMetaMap, getSiteConfig } from "@/lib/site-config";
+import { getProductCategories, getProductMetaMap, getProductVariants, getSiteConfig } from "@/lib/site-config";
 
 export default async function SellerProductsPage() {
   const session = await getServerSession(authOptions);
@@ -23,6 +23,17 @@ export default async function SellerProductsPage() {
     prisma.product.findMany({
       where: { sellerId: session.user.id },
       orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        priceCents: true,
+        stock: true,
+        imageUrls: true,
+        status: true,
+        listedAt: true,
+        renewalNotifiedAt: true,
+      },
     }),
     getProductMetaMap(),
     getSiteConfig(),
@@ -30,10 +41,17 @@ export default async function SellerProductsPage() {
 
   const products = productsRaw.map((p) => ({
     ...p,
-    category: meta[p.id]?.category ?? "",
+    listedAt: p.listedAt.toISOString(),
+    renewalNotifiedAt: p.renewalNotifiedAt?.toISOString() ?? null,
+    categories: getProductCategories(meta[p.id]),
+    variants: getProductVariants(meta[p.id]),
     materials: meta[p.id]?.materials ?? "",
     dimensions: meta[p.id]?.dimensions ?? "",
+    draft: Boolean(meta[p.id]?.draft),
+    publishAt: meta[p.id]?.publishAt ?? null,
   }));
+
+  const lowStockProducts = products.filter((product) => product.stock <= 5);
 
   return (
     <main className="mx-auto min-h-screen max-w-5xl px-6 py-16 text-slate-900">
@@ -48,7 +66,7 @@ export default async function SellerProductsPage() {
           </Link>
         </div>
       </div>
-      <SellerProductsManager initialProducts={products} categories={config.categories} />
+      <SellerProductsManager initialProducts={products} categories={config.categories} lowStockProducts={lowStockProducts} />
     </main>
   );
 }

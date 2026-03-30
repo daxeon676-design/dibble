@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { WebhookEventStatus } from "@/generated/prisma/enums";
 import Stripe from "stripe";
 
+import { createOrdersFromPendingCheckout } from "@/app/api/checkout/confirm/route";
 import { finalizeOrderPayment } from "@/lib/payment-finalizer";
 import { logApiEvent } from "@/lib/observability";
 import { prisma } from "@/lib/prisma";
@@ -114,9 +115,12 @@ export async function POST(request: Request) {
     if (event.type === "payment_intent.succeeded") {
       const paymentIntent = event.data.object as Stripe.PaymentIntent;
       const orderId = paymentIntent.metadata.orderId;
+      const pendingCheckoutId = paymentIntent.metadata.pendingCheckoutId;
 
       if (orderId) {
         await finalizeOrderPayment(orderId, paymentIntent.id, "SUCCEEDED");
+      } else if (pendingCheckoutId) {
+        await createOrdersFromPendingCheckout(pendingCheckoutId, paymentIntent.id);
       }
     }
 

@@ -23,6 +23,16 @@ export async function getOpsAlertDeliveryStatus(): Promise<OpsAlertDeliveryStatu
 }
 
 export async function saveOpsAlertDeliveryStatus(status: OpsAlertDeliveryStatus) {
-  await fs.mkdir(dataDir, { recursive: true });
-  await fs.writeFile(statusPath, JSON.stringify(status, null, 2), "utf8");
+  try {
+    await fs.mkdir(dataDir, { recursive: true });
+    await fs.writeFile(statusPath, JSON.stringify(status, null, 2), "utf8");
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException | undefined)?.code;
+    if (code === "EROFS") {
+      // Vercel serverless runtime is read-only; alert dispatch should continue.
+      console.warn("[ops-alert-delivery-store] Skipping status write on read-only filesystem.");
+      return;
+    }
+    throw error;
+  }
 }

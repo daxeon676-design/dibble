@@ -14,6 +14,134 @@ import {
   setSellerStripeAccountId,
 } from "@/lib/site-config";
 
+const PAYOUTS_ROUTE_VERSION = "payouts-route-2026-03-30-3";
+
+function withRouteVersion(message: string) {
+  return `${message} [${PAYOUTS_ROUTE_VERSION}]`;
+}
+
+function resolveAppUrl(request: Request) {
+  const configuredUrl =
+    process.env.NEXT_PUBLIC_SITE_URL ??
+    process.env.NEXTAUTH_URL ??
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null);
+
+  if (configuredUrl) {
+    return configuredUrl.replace(/\/$/, "");
+  }
+
+  const forwardedProto = request.headers.get("x-forwarded-proto");
+  const forwardedHost = request.headers.get("x-forwarded-host");
+
+  if (forwardedProto && forwardedHost) {
+    return `${forwardedProto}://${forwardedHost}`;
+  }
+
+  const requestUrl = new URL(request.url);
+  return requestUrl.origin;
+}
+
+function isMissingStripeAccountError(error: unknown) {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  const stripeCode = "code" in error ? String((error as { code?: unknown }).code ?? "") : "";
+  if (stripeCode === "resource_missing") {
+    return true;
+  }
+
+  return /no such account|account.*does not exist/i.test(error.message);
+}
+
+async function createStripeOnboardingLink(accountId: string, request: Request) {
+  const appUrl = resolveAppUrl(request);
+
+  return stripe!.accountLinks.create({
+    account: accountId,
+    type: "account_onboarding",
+    refresh_url: `${appUrl}/seller?payouts=retry`,
+    return_url: `${appUrl}/seller?payouts=done`,
+  });
+}
+
+async function createFreshStripeConnectAccount(sellerId: string) {
+  const seller = await prisma.user.findUnique({
+    where: { id: sellerId },
+    select: { email: true, displayName: true },
+  });
+
+  const account = await stripe!.accounts.create({
+    type: "express",
+    country: "GB",
+    email: seller?.email ?? undefined,
+    business_type: "individual",
+    capabilities: {
+      card_payments: { requested: true },
+      transfers: { requested: true },
+    },
+    metadata: {
+      sellerId,
+      sellerName: seller?.displayName ?? seller?.email ?? "",
+    },
+  });
+
+  await setSellerStripeAccountId(sellerId, account.id);
+  return account;
+}
+
+async function createStripeOnboardingLinkWithRecovery(sellerId: string, accountId: string, request: Request) {
+  try {
+    const link = await createStripeOnboardingLink(accountId, request);
+    return { link, accountId };
+  } catch {
+    const freshAccount = await createFreshStripeConnectAccount(sellerId);
+    const link = await createStripeOnboardingLink(freshAccount.id, request);
+    return { link, accountId: freshAccount.id };
+  }
+}
+
+async function getOrCreateStripeConnectAccount(sellerId: string) {
+  const seller = await prisma.user.findUnique({
+    where: { id: sellerId },
+    select: { email: true, displayName: true },
+  });
+
+  let accountId = await getSellerStripeAccountId(sellerId);
+
+  if (accountId) {
+    try {
+      const account = await stripe!.accounts.retrieve(accountId);
+      return { accountId, account };
+    } catch (error) {
+      if (!isMissingStripeAccountError(error)) {
+        throw error;
+      }
+
+      await setSellerStripeAccountId(sellerId, null);
+      accountId = null;
+    }
+  }
+
+  const account = await stripe!.accounts.create({
+    type: "express",
+    country: "GB",
+    email: seller?.email ?? undefined,
+    business_type: "individual",
+    capabilities: {
+      card_payments: { requested: true },
+      transfers: { requested: true },
+    },
+    metadata: {
+      sellerId,
+      sellerName: seller?.displayName ?? seller?.email ?? "",
+    },
+  });
+
+  await setSellerStripeAccountId(sellerId, account.id);
+  return { accountId: account.id, account };
+}
+
 const updateProfileSchema = z
   .object({
     method: z.enum(["STRIPE_CONNECT", "BANK_TRANSFER", "PAYPAL", "MANUAL_REVIEW"]).optional(),
@@ -110,7 +238,26 @@ async function getSellerAccountStatus(sellerId: string) {
     };
   }
 
-  const account = await stripe.accounts.retrieve(accountId);
+  let account;
+  try {
+    account = await stripe.accounts.retrieve(accountId);
+  } catch (error) {
+    if (!isMissingStripeAccountError(error)) {
+      throw error;
+    }
+
+    await setSellerStripeAccountId(sellerId, null);
+    return {
+      stripeEnabled: true,
+      hasConnectAccount: false,
+      accountId: null,
+      chargesEnabled: false,
+      payoutsEnabled: false,
+      onboardingComplete: false,
+      detailsSubmitted: false,
+      dashboardUrl: null as string | null,
+    };
+  }
 
   return {
     stripeEnabled: true,
@@ -125,128 +272,133 @@ async function getSellerAccountStatus(sellerId: string) {
 }
 
 export async function GET() {
-  const session = await getServerSession(authOptions);
-  const authError = requireSellerRole(session);
-  if (authError) return authError;
+  try {
+    const session = await getServerSession(authOptions);
+    const authError = requireSellerRole(session);
+    if (authError) return authError;
 
-  const [status, payoutProfile] = await Promise.all([
-    getSellerAccountStatus(session!.user.id),
-    getSellerPayoutProfile(session!.user.id),
-  ]);
+    const [status, payoutProfile] = await Promise.all([
+      getSellerAccountStatus(session!.user.id),
+      getSellerPayoutProfile(session!.user.id),
+    ]);
 
-  return NextResponse.json({ ...status, payoutProfile });
+    return NextResponse.json({ ...status, payoutProfile });
+  } catch (error) {
+    const message = error instanceof Error && error.message.trim()
+      ? error.message
+      : "Could not load payout status.";
+    return NextResponse.json({ error: withRouteVersion(message) }, { status: 500 });
+  }
 }
 
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
-  const authError = requireSellerRole(session);
-  if (authError) return authError;
+  try {
+    const session = await getServerSession(authOptions);
+    const authError = requireSellerRole(session);
+    if (authError) return authError;
 
-  const rateLimit = checkRateLimit(request, {
-    scope: "seller-payouts-write",
-    limit: 90,
-    windowMs: 60_000,
-    key: `seller:${session!.user.id}`,
-  });
+    const rateLimit = checkRateLimit(request, {
+      scope: "seller-payouts-write",
+      limit: 90,
+      windowMs: 60_000,
+      key: `seller:${session!.user.id}`,
+    });
 
-  if (!rateLimit.ok) {
-    return NextResponse.json(
-      { error: "Too many payout requests. Please retry shortly." },
-      {
-        status: 429,
-        headers: { "Retry-After": String(rateLimit.retryAfterSeconds) },
-      },
-    );
-  }
-
-  const body = (await request.json().catch(() => null)) as
-    | ({ action?: string } & Record<string, unknown>)
-    | null;
-  const action = body?.action ?? "start_onboarding";
-
-  const sellerId = session!.user.id;
-
-  if (action === "update_profile") {
-    const parsed = updateProfileSchema.safeParse(body ?? {});
-    if (!parsed.success) {
+    if (!rateLimit.ok) {
       return NextResponse.json(
+        { error: "Too many payout requests. Please retry shortly." },
         {
-          error: "Invalid payout profile details.",
-          fields: parsed.error.flatten(),
+          status: 429,
+          headers: { "Retry-After": String(rateLimit.retryAfterSeconds) },
         },
-        { status: 400 },
       );
     }
 
-    const cleaned = {
-      method: parsed.data.method,
-      payeeName: parsed.data.payeeName?.trim() || undefined,
-      payoutEmail: parsed.data.payoutEmail?.trim() || undefined,
-      bankName: parsed.data.bankName?.trim() || undefined,
-      bankAccountLast4: parsed.data.bankAccountLast4?.trim() || undefined,
-      bankSortCodeLast2: parsed.data.bankSortCodeLast2?.trim() || undefined,
-      paypalEmail: parsed.data.paypalEmail?.trim() || undefined,
-      notes: parsed.data.notes?.trim() || undefined,
-    };
+    const body = (await request.json().catch(() => null)) as
+      | ({ action?: string } & Record<string, unknown>)
+      | null;
+    const action = body?.action ?? "start_onboarding";
 
-    await setSellerPayoutProfile(sellerId, cleaned);
-    const payoutProfile = await getSellerPayoutProfile(sellerId);
-    return NextResponse.json({ ok: true, payoutProfile });
-  }
+    const sellerId = session!.user.id;
 
-  if (!stripe) {
-    return NextResponse.json({ error: "Stripe is not configured." }, { status: 503 });
-  }
+    if (action === "update_profile") {
+      const parsed = updateProfileSchema.safeParse(body ?? {});
+      if (!parsed.success) {
+        return NextResponse.json(
+          {
+            error: "Invalid payout profile details.",
+            fields: parsed.error.flatten(),
+          },
+          { status: 400 },
+        );
+      }
 
-  if (action === "start_onboarding") {
-    const seller = await prisma.user.findUnique({
-      where: { id: sellerId },
-      select: { email: true, displayName: true },
-    });
+      const cleaned = {
+        method: parsed.data.method,
+        payeeName: parsed.data.payeeName?.trim() || undefined,
+        payoutEmail: parsed.data.payoutEmail?.trim() || undefined,
+        bankName: parsed.data.bankName?.trim() || undefined,
+        bankAccountLast4: parsed.data.bankAccountLast4?.trim() || undefined,
+        bankSortCodeLast2: parsed.data.bankSortCodeLast2?.trim() || undefined,
+        paypalEmail: parsed.data.paypalEmail?.trim() || undefined,
+        notes: parsed.data.notes?.trim() || undefined,
+      };
 
-    let accountId = await getSellerStripeAccountId(sellerId);
+      await setSellerPayoutProfile(sellerId, cleaned);
+      const payoutProfile = await getSellerPayoutProfile(sellerId);
+      return NextResponse.json({ ok: true, payoutProfile });
+    }
 
-    if (!accountId) {
-      const account = await stripe.accounts.create({
-        type: "express",
-        country: "GB",
-        email: seller?.email ?? undefined,
-        business_type: "individual",
-        capabilities: {
-          card_payments: { requested: true },
-          transfers: { requested: true },
-        },
-        metadata: {
+    if (!stripe) {
+      return NextResponse.json({ error: "Stripe is not configured." }, { status: 503 });
+    }
+
+    if (action === "start_onboarding") {
+      try {
+        const { accountId } = await getOrCreateStripeConnectAccount(sellerId);
+        const { link: accountLink, accountId: activeAccountId } = await createStripeOnboardingLinkWithRecovery(
           sellerId,
-          sellerName: seller?.displayName ?? seller?.email ?? "",
-        },
-      });
+          accountId,
+          request,
+        );
 
-      accountId = account.id;
-      await setSellerStripeAccountId(sellerId, account.id);
+        return NextResponse.json({ url: accountLink.url, accountId: activeAccountId });
+      } catch (error) {
+        const message = error instanceof Error && error.message.trim()
+          ? error.message
+          : "Could not create onboarding link.";
+        return NextResponse.json({ error: withRouteVersion(message) }, { status: 500 });
+      }
     }
 
-    const appUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
+    if (action === "open_dashboard") {
+      try {
+        const { accountId, account } = await getOrCreateStripeConnectAccount(sellerId);
 
-    const accountLink = await stripe.accountLinks.create({
-      account: accountId,
-      type: "account_onboarding",
-      refresh_url: `${appUrl}/seller?payouts=retry`,
-      return_url: `${appUrl}/seller?payouts=done`,
-    });
+        if (!account.details_submitted) {
+          const { link: onboardingLink, accountId: activeAccountId } = await createStripeOnboardingLinkWithRecovery(
+            sellerId,
+            accountId,
+            request,
+          );
+          return NextResponse.json({ url: onboardingLink.url, accountId: activeAccountId });
+        }
 
-    return NextResponse.json({ url: accountLink.url, accountId });
-  }
-
-  if (action === "open_dashboard") {
-    const accountId = await getSellerStripeAccountId(sellerId);
-    if (!accountId) {
-      return NextResponse.json({ error: "Seller payout account is not configured." }, { status: 409 });
+        const loginLink = await stripe.accounts.createLoginLink(accountId);
+        return NextResponse.json({ url: loginLink.url, accountId });
+      } catch (error) {
+        const message = error instanceof Error && error.message.trim()
+          ? error.message
+          : "Could not open Stripe dashboard.";
+        return NextResponse.json({ error: withRouteVersion(message) }, { status: 500 });
+      }
     }
 
-    const loginLink = await stripe.accounts.createLoginLink(accountId);
-    return NextResponse.json({ url: loginLink.url, accountId });
+    return NextResponse.json({ error: "Unsupported action." }, { status: 400 });
+  } catch (error) {
+    const message = error instanceof Error && error.message.trim()
+      ? error.message
+      : "Could not process payout request.";
+    return NextResponse.json({ error: withRouteVersion(message) }, { status: 500 });
   }
-
-  return NextResponse.json({ error: "Unsupported action." }, { status: 400 });
 }

@@ -65,6 +65,19 @@ function Dropdown({
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const closeTimer = useRef<number | null>(null);
+
+  function cancelScheduledClose() {
+    if (closeTimer.current !== null) {
+      window.clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+    }
+  }
+
+  function scheduleClose() {
+    cancelScheduledClose();
+    closeTimer.current = window.setTimeout(() => setOpen(false), 240);
+  }
 
   function closeIfOutside(e: React.MouseEvent<HTMLDivElement>) {
     if (!ref.current) return;
@@ -75,7 +88,12 @@ function Dropdown({
   }
 
   return (
-    <div className="relative" ref={ref} onMouseLeave={() => setOpen(false)}>
+    <div
+      className="relative"
+      ref={ref}
+      onMouseEnter={cancelScheduledClose}
+      onMouseLeave={scheduleClose}
+    >
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
@@ -95,9 +113,11 @@ function Dropdown({
       </button>
       {open && (
         <div
-          className="absolute right-0 z-50 mt-2 min-w-52 rounded-xl border border-(--accent-terra)/30 bg-white shadow-xl ring-1 ring-black/5"
+          className="absolute right-0 z-50 mt-1 min-w-52 rounded-xl border border-(--accent-terra)/30 bg-white shadow-xl ring-1 ring-black/5"
           onClick={() => setOpen(false)}
           onMouseDown={closeIfOutside}
+          onMouseEnter={cancelScheduledClose}
+          onMouseLeave={scheduleClose}
         >
           {children}
         </div>

@@ -5,18 +5,29 @@ import { useRouter } from "next/navigation";
 
 type ConfigResponse = { categories: string[] };
 
+type VariantDraft = {
+  id: string;
+  label: string;
+  priceDelta: string;
+  stockOverride: string;
+  sku: string;
+};
+
 export default function NewProductForm() {
   const router = useRouter();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("0.00");
   const [stock, setStock] = useState(1);
-  const [category, setCategory] = useState("");
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [materials, setMaterials] = useState("");
   const [dimensions, setDimensions] = useState("");
+  const [variants, setVariants] = useState<VariantDraft[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [publishMode, setPublishMode] = useState<"now" | "draft" | "schedule">("now");
+  const [publishAt, setPublishAt] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -26,10 +37,37 @@ export default function NewProductForm() {
       .then((data: ConfigResponse) => {
         setCategories(data.categories ?? []);
         if ((data.categories ?? []).length > 0) {
-          setCategory(data.categories[0]);
+          setSelectedCategories([data.categories[0]]);
         }
       });
   }, []);
+
+  function toggleCategory(category: string) {
+    setSelectedCategories((prev) =>
+      prev.includes(category) ? prev.filter((value) => value !== category) : [...prev, category],
+    );
+  }
+
+  function addVariant() {
+    setVariants((prev) => [
+      ...prev,
+      {
+        id: `variant-${prev.length + 1}`,
+        label: "",
+        priceDelta: "0.00",
+        stockOverride: "",
+        sku: "",
+      },
+    ]);
+  }
+
+  function updateVariant(index: number, patch: Partial<VariantDraft>) {
+    setVariants((prev) => prev.map((variant, variantIndex) => (variantIndex === index ? { ...variant, ...patch } : variant)));
+  }
+
+  function removeVariant(index: number) {
+    setVariants((prev) => prev.filter((_, variantIndex) => variantIndex !== index));
+  }
 
   const priceCents = useMemo(() => Math.round(Number(price || "0") * 100), [price]);
 
@@ -64,9 +102,20 @@ export default function NewProductForm() {
         priceCents,
         stock,
         imageUrls,
-        category,
+        categories: selectedCategories,
         materials,
         dimensions,
+        variants: variants
+          .map((variant) => ({
+            id: variant.id.trim(),
+            label: variant.label.trim(),
+            priceDeltaCents: Math.round(Number(variant.priceDelta || "0") * 100),
+            stockOverride: variant.stockOverride ? Math.max(0, Math.trunc(Number(variant.stockOverride))) : null,
+            sku: variant.sku.trim() || null,
+          }))
+          .filter((variant) => variant.id && variant.label),
+        publishMode,
+        publishAt: publishMode === "schedule" && publishAt ? new Date(publishAt).toISOString() : undefined,
       }),
     });
 
@@ -130,18 +179,26 @@ export default function NewProductForm() {
           />
         </label>
 
-        <label className="block text-sm text-foreground">
-          <span>Category</span>
-          <select
-            value={category}
-            onChange={(event) => setCategory(event.target.value)}
-            className="mt-1 w-full rounded-md border border-(--accent-terra)/50 bg-white px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-(--accent-terra)"
-          >
+        <div className="block text-sm text-foreground">
+          <p>Categories</p>
+          <div className="mt-2 max-h-40 space-y-1 overflow-auto rounded-md border border-(--accent-terra)/50 bg-white px-3 py-2">
             {categories.map((c) => (
-              <option key={c} value={c}>{c}</option>
+              <label key={c} className="flex items-center gap-2 text-sm text-foreground">
+                <input
+                  type="checkbox"
+                  checked={selectedCategories.includes(c)}
+                  onChange={() => toggleCategory(c)}
+                />
+                <span>{c}</span>
+              </label>
             ))}
-          </select>
-        </label>
+          </div>
+          {selectedCategories.length > 0 ? (
+            <p className="mt-1 text-xs text-foreground/60">Selected: {selectedCategories.join(", ")}</p>
+          ) : (
+            <p className="mt-1 text-xs text-red-600">Select at least one category.</p>
+          )}
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
@@ -166,13 +223,118 @@ export default function NewProductForm() {
         </label>
       </div>
 
+      <div className="space-y-3 rounded-md border border-(--accent-terra)/30 bg-(--accent-beige)/20 p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-medium text-foreground">Product variants</p>
+            <p className="text-xs text-foreground/60">Optional choices like size, colour, or bundle format.</p>
+          </div>
+          <button
+            type="button"
+            onClick={addVariant}
+            className="rounded-md border border-(--accent-terra) px-3 py-1.5 text-xs font-semibold text-(--accent-terra)"
+          >
+            Add variant
+          </button>
+        </div>
+
+        {variants.length === 0 ? <p className="text-xs text-foreground/60">No variants added. Buyers will purchase the base product.</p> : null}
+
+        {variants.map((variant, index) => (
+          <div key={`${variant.id}-${index}`} className="grid gap-3 rounded-md border border-(--accent-terra)/20 bg-white p-3 md:grid-cols-5">
+            <label className="block text-xs text-foreground">
+              <span>ID</span>
+              <input
+                value={variant.id}
+                onChange={(event) => updateVariant(index, { id: event.target.value })}
+                className="mt-1 w-full rounded-md border border-(--accent-terra)/40 px-2 py-1.5"
+              />
+            </label>
+            <label className="block text-xs text-foreground md:col-span-2">
+              <span>Label</span>
+              <input
+                value={variant.label}
+                onChange={(event) => updateVariant(index, { label: event.target.value })}
+                placeholder="Small / Blue / 12-pack"
+                className="mt-1 w-full rounded-md border border-(--accent-terra)/40 px-2 py-1.5"
+              />
+            </label>
+            <label className="block text-xs text-foreground">
+              <span>Price delta (£)</span>
+              <input
+                type="number"
+                step="0.01"
+                value={variant.priceDelta}
+                onChange={(event) => updateVariant(index, { priceDelta: event.target.value })}
+                className="mt-1 w-full rounded-md border border-(--accent-terra)/40 px-2 py-1.5"
+              />
+            </label>
+            <label className="block text-xs text-foreground">
+              <span>Stock override</span>
+              <input
+                type="number"
+                min={0}
+                value={variant.stockOverride}
+                onChange={(event) => updateVariant(index, { stockOverride: event.target.value })}
+                className="mt-1 w-full rounded-md border border-(--accent-terra)/40 px-2 py-1.5"
+              />
+            </label>
+            <label className="block text-xs text-foreground md:col-span-4">
+              <span>SKU</span>
+              <input
+                value={variant.sku}
+                onChange={(event) => updateVariant(index, { sku: event.target.value })}
+                className="mt-1 w-full rounded-md border border-(--accent-terra)/40 px-2 py-1.5"
+              />
+            </label>
+            <div className="flex items-end justify-end md:col-span-1">
+              <button
+                type="button"
+                onClick={() => removeVariant(index)}
+                className="rounded-md bg-red-500 px-3 py-1.5 text-xs font-semibold text-white"
+              >
+                Remove
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <label className="block text-sm text-foreground">
+          <span>Publishing</span>
+          <select
+            value={publishMode}
+            onChange={(event) => setPublishMode(event.target.value as "now" | "draft" | "schedule")}
+            className="mt-1 w-full rounded-md border border-(--accent-terra)/50 bg-white px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-(--accent-terra)"
+          >
+            <option value="now">Publish now</option>
+            <option value="draft">Save as draft</option>
+            <option value="schedule">Schedule publish</option>
+          </select>
+        </label>
+        {publishMode === "schedule" ? (
+          <label className="block text-sm text-foreground">
+            <span>Publish on</span>
+            <input
+              type="datetime-local"
+              value={publishAt}
+              onChange={(event) => setPublishAt(event.target.value)}
+              className="mt-1 w-full rounded-md border border-(--accent-terra)/50 bg-white px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-(--accent-terra)"
+            />
+          </label>
+        ) : (
+          <div />
+        )}
+      </div>
+
       <div className="space-y-2">
         <p className="text-sm font-medium text-foreground">Product Images</p>
         <label className="inline-block cursor-pointer rounded-md border border-(--accent-terra) px-3 py-2 text-sm text-(--accent-terra) hover:bg-(--accent-beige)">
           Upload Image
           <input
             type="file"
-            accept="image/*"
+            accept="image/jpeg,image/jpg,image/png,image/webp,image/gif"
             className="hidden"
             onChange={(event) => {
               const file = event.target.files?.[0];
@@ -207,7 +369,7 @@ export default function NewProductForm() {
       <div className="flex gap-2">
         <button
           type="submit"
-          disabled={loading || uploading}
+          disabled={loading || uploading || selectedCategories.length === 0}
           className="rounded-md bg-(--accent-terra) px-5 py-2 font-semibold text-(--accent-beige) hover:opacity-90 disabled:opacity-60"
         >
           {loading ? "Creating..." : "Create Product"}

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { authOptions } from "@/lib/auth";
+import { deleteCartItemMeta } from "@/lib/cart-item-meta";
 import { prisma } from "@/lib/prisma";
 
 const updateQuantitySchema = z.object({
@@ -66,6 +67,7 @@ export async function DELETE(
   }
 
   await prisma.cartItem.delete({ where: { id: itemId } });
+  await deleteCartItemMeta(itemId);
 
   return NextResponse.json({ success: true });
 }

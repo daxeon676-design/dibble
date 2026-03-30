@@ -1,6 +1,6 @@
 import { PaymentStatus } from "@/generated/prisma/enums";
 import { buildPaymentMutationPlan } from "@/lib/payment-state";
-import { calculateMarketplaceSplit, getSellerStripeAccountId, getSiteConfig } from "@/lib/site-config";
+import { calculateMarketplaceSplit, getSiteConfig } from "@/lib/site-config";
 import { upsertSellerPayout } from "@/lib/seller-payout-ledger";
 import { prisma } from "@/lib/prisma";
 
@@ -83,16 +83,19 @@ export async function finalizeOrderPayment(
 
       if (status === "SUCCEEDED") {
         const split = calculateMarketplaceSplit(order.totalCents, config?.platformFeePercent ?? 0);
-        const hasConnectedAccount = Boolean(await getSellerStripeAccountId(order.sellerId));
 
-        await upsertSellerPayout({
-          orderId: order.id,
-          sellerId: order.sellerId,
-          grossCents: order.totalCents,
-          platformFeeCents: split.platformFeeCents,
-          sellerPayoutCents: split.sellerPayoutCents,
-          status: hasConnectedAccount ? "SPLIT_AT_CHARGE" : "PLATFORM_PENDING",
-        });
+        try {
+          await upsertSellerPayout({
+            orderId: order.id,
+            sellerId: order.sellerId,
+            grossCents: order.totalCents,
+            platformFeeCents: split.platformFeeCents,
+            sellerPayoutCents: split.sellerPayoutCents,
+            status: "PLATFORM_PENDING",
+          });
+        } catch {
+          // Payout ledger persistence must not block successful payment finalization.
+        }
       }
 
       return { updated: true, order: updatedOrder };
@@ -100,16 +103,19 @@ export async function finalizeOrderPayment(
 
     if (status === "SUCCEEDED") {
       const split = calculateMarketplaceSplit(order.totalCents, config?.platformFeePercent ?? 0);
-      const hasConnectedAccount = Boolean(await getSellerStripeAccountId(order.sellerId));
 
-      await upsertSellerPayout({
-        orderId: order.id,
-        sellerId: order.sellerId,
-        grossCents: order.totalCents,
-        platformFeeCents: split.platformFeeCents,
-        sellerPayoutCents: split.sellerPayoutCents,
-        status: hasConnectedAccount ? "SPLIT_AT_CHARGE" : "PLATFORM_PENDING",
-      });
+      try {
+        await upsertSellerPayout({
+          orderId: order.id,
+          sellerId: order.sellerId,
+          grossCents: order.totalCents,
+          platformFeeCents: split.platformFeeCents,
+          sellerPayoutCents: split.sellerPayoutCents,
+          status: "PLATFORM_PENDING",
+        });
+      } catch {
+        // Payout ledger persistence must not block successful payment finalization.
+      }
     }
 
     return { updated: Object.keys(paymentPatch).length > 0, order };

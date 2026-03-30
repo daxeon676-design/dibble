@@ -2,6 +2,7 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { useEffect, useRef, useState } from "react";
+import { signOut } from "next-auth/react";
 
 interface Profile {
   id: string;
@@ -408,8 +409,9 @@ function DeleteAccountSection() {
         throw new Error(data.error?.fieldErrors?.confirmation?.[0] || data.error || "Failed to delete account");
       }
 
-      // Redirect to login after successful deletion
-      window.location.href = "/login?deleted=true";
+      // Force-clear NextAuth session/cookies so the deleted account is not kept signed in.
+      await signOut({ callbackUrl: "/login?deleted=true" });
+      return;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
       setLoading(false);

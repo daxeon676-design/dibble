@@ -5,11 +5,17 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 
+import { HumanVerification } from "@/app/components/human-verification";
+
 export default function RegisterPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [marketingOptIn, setMarketingOptIn] = useState(false);
+  const [humanVerificationToken, setHumanVerificationToken] = useState<string | null>(null);
+  const [verificationResetSignal, setVerificationResetSignal] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -21,12 +27,14 @@ export default function RegisterPage() {
     const registerResponse = await fetch("/api/auth/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password, displayName }),
+      body: JSON.stringify({ email, password, displayName, humanVerificationToken, termsAccepted, marketingOptIn }),
     });
 
     if (!registerResponse.ok) {
       const body = (await registerResponse.json().catch(() => null)) as { error?: string } | null;
-      setError(body?.error ?? "Unable to register.");
+      setError(`${body?.error ?? "Unable to register."} Please complete human verification again.`);
+      setHumanVerificationToken(null);
+      setVerificationResetSignal((v) => v + 1);
       setLoading(false);
       return;
     }
@@ -87,11 +95,42 @@ export default function RegisterPage() {
           />
         </label>
 
+        <div className="space-y-2">
+          <p className="text-sm">Human verification</p>
+          <HumanVerification onTokenChange={setHumanVerificationToken} resetSignal={verificationResetSignal} />
+        </div>
+
+        <label className="flex items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            required
+            checked={termsAccepted}
+            onChange={(e) => setTermsAccepted(e.target.checked)}
+            className="mt-0.5 shrink-0"
+          />
+          <span>
+            I have read and agree to the{" "}
+            <Link href="/terms" target="_blank" className="text-emerald-300 underline">Terms &amp; Conditions</Link>{" "}
+            and{" "}
+            <Link href="/privacy" target="_blank" className="text-emerald-300 underline">Privacy Policy</Link>.
+          </span>
+        </label>
+
+        <label className="flex items-start gap-2 text-sm text-slate-300">
+          <input
+            type="checkbox"
+            checked={marketingOptIn}
+            onChange={(e) => setMarketingOptIn(e.target.checked)}
+            className="mt-0.5 shrink-0"
+          />
+          <span>Send me occasional updates about new sellers and products on Dibble. You can unsubscribe at any time.</span>
+        </label>
+
         {error ? <p className="text-sm text-red-400">{error}</p> : null}
 
         <button
           type="submit"
-          disabled={loading}
+          disabled={loading || !humanVerificationToken || !termsAccepted}
           className="w-full rounded-md bg-emerald-500 px-4 py-2 font-semibold text-slate-950 disabled:opacity-60"
         >
           {loading ? "Creating account..." : "Create account"}

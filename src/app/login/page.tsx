@@ -126,6 +126,12 @@ export default function LoginPage() {
           />
         </label>
 
+        <div className="text-right">
+          <Link href="/forgot-password" className="text-xs text-(--accent-terra) underline hover:opacity-80">
+            Forgot password?
+          </Link>
+        </div>
+
         <label className="flex items-center gap-2 text-sm">
           <input
             type="checkbox"

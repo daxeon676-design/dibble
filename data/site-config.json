@@ -1,9 +1,50 @@
 {
-  "categories": ["Art", "Home", "Jewelry", "Prints", "Ceramics", "Apparell", "Food", "Local", "Pets"],
+  "categories": [
+    "Accessories",
+    "Apparell",
+    "Bath/Beauty",
+    "Books",
+    "Carving",
+    "Food",
+    "Home",
+    "Jewellery",
+    "Knitting/Crochet",
+    "Lino Prints",
+    "Local",
+    "Painting",
+    "Paper",
+    "Pets",
+    "Photography",
+    "Picture Frames",
+    "Pictures",
+    "Pottery/Ceramics",
+    "Art",
+    "Prints",
+    "Ceramics"
+  ],
   "deliveryOptions": [
-    { "id": "standard", "name": "Standard Delivery", "costPence": 399, "enabled": true },
-    { "id": "express", "name": "Express Delivery", "costPence": 799, "enabled": true }
+    {
+      "id": "standard",
+      "name": "Standard Delivery",
+      "costPence": 399,
+      "enabled": true
+    },
+    {
+      "id": "express",
+      "name": "Express Delivery",
+      "costPence": 799,
+      "enabled": true
+    }
   ],
   "homepageTagline": "Shop the latest handcrafted products from talented artists around the world.",
-  "footerDescription": "Shop the latest handcrafted products from talented artists around the world."
+  "footerDescription": "Shop the latest handcrafted products from talented artists around the world.",
+  "platformFeePercent": 12,
+  "supportEmail": "contact@dibblemarketplace.com",
+  "allowNewSellerApplications": true,
+  "maxActiveSellerAccounts": 250,
+  "maintenanceMode": false,
+  "checkoutPaused": false,
+  "newAccountsPaused": false,
+  "pendingFeeChange": null,
+  "pendingSellerLimitChange": null
 }

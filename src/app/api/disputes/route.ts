@@ -4,6 +4,38 @@ import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+const disputeInclude = {
+  order: {
+    select: {
+      id: true,
+      totalCents: true,
+      createdAt: true,
+      sellerId: true,
+      payment: {
+        select: {
+          id: true,
+          status: true,
+          amountCents: true,
+          refundAmountCents: true,
+          refundedAt: true,
+          stripeRefundId: true,
+          refundReason: true,
+        },
+      },
+      buyer: { select: { id: true, email: true, displayName: true } },
+      seller: { select: { id: true, email: true, displayName: true } },
+    },
+  },
+  raisedBy: { select: { id: true, email: true, displayName: true } },
+  resolvedBy: { select: { id: true, email: true, displayName: true } },
+  messages: {
+    include: {
+      sender: { select: { id: true, email: true, displayName: true, role: true } },
+    },
+    orderBy: { createdAt: "asc" as const },
+  },
+};
+
 const schema = z.object({
   orderId: z.string(),
   reason: z.string().min(5).max(200),
@@ -35,6 +67,7 @@ export async function POST(req: Request) {
 
   const dispute = await prisma.dispute.create({
     data: { orderId, raisedById: session.user.id, reason, details },
+    include: disputeInclude,
   });
 
   return NextResponse.json(dispute, { status: 201 });
@@ -49,11 +82,7 @@ export async function GET() {
 
   const disputes = await prisma.dispute.findMany({
     where,
-    include: {
-      order: { select: { id: true, totalCents: true, createdAt: true } },
-      raisedBy: { select: { id: true, email: true, displayName: true } },
-      resolvedBy: { select: { id: true, email: true, displayName: true } },
-    },
+    include: disputeInclude,
     orderBy: { createdAt: "desc" },
   });
 

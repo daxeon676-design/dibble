@@ -6,6 +6,8 @@ import { redirect } from "next/navigation";
 import { DisputeStatus, Role, SellerApplicationStatus, UserStatus } from "@/generated/prisma/enums";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getSellerShopProfiles } from "@/lib/site-config";
+import { getUserModerationFlags } from "@/lib/user-moderation-flags";
 import UsersSupportClient from "@/app/admin/users-support/users-support-client";
 
 export const metadata: Metadata = { title: "Users & Support - Admin" };
@@ -16,7 +18,15 @@ export default async function AdminUsersSupportPage() {
     redirect("/login?callbackUrl=/admin/users-support");
   }
 
-  const [users, openDisputes, pendingSellerApplications, buyersWithUnreadMessages, sellersWithUnreadMessages] = await Promise.all([
+  const [
+    users,
+    openDisputes,
+    pendingSellerApplications,
+    buyersWithUnreadMessages,
+    sellersWithUnreadMessages,
+    sellerShopProfiles,
+    moderationFlags,
+  ] = await Promise.all([
     prisma.user.findMany({
       select: {
         id: true,
@@ -45,6 +55,8 @@ export default async function AdminUsersSupportPage() {
     prisma.sellerApplication.count({ where: { status: SellerApplicationStatus.PENDING } }),
     prisma.conversationParticipant.count({ where: { readAt: null, user: { role: Role.BUYER } } }),
     prisma.conversationParticipant.count({ where: { readAt: null, user: { role: Role.SELLER } } }),
+    getSellerShopProfiles(),
+    getUserModerationFlags(),
   ]);
 
   const summary = {
@@ -54,6 +66,7 @@ export default async function AdminUsersSupportPage() {
     sellersWithUnreadMessages,
     suspendedUsers: users.filter((user) => user.status === UserStatus.SUSPENDED).length,
     activeUsers: users.filter((user) => user.status === UserStatus.ACTIVE).length,
+    flaggedUsers: users.filter((user) => moderationFlags[user.id]?.flagged).length,
   };
 
   const normalizedUsers = users.map((user) => ({
@@ -65,6 +78,9 @@ export default async function AdminUsersSupportPage() {
     mfaEnabled: user.mfaEnabled,
     createdAt: user.createdAt.toISOString(),
     sellerApplicationStatus: user.sellerApplication?.status ?? null,
+    sellerVerified: user.role === Role.SELLER ? Boolean(sellerShopProfiles[user.id]?.verified) : null,
+    moderationFlagged: Boolean(moderationFlags[user.id]?.flagged),
+    moderationFlagReason: moderationFlags[user.id]?.reason ?? null,
   }));
 
   return (
@@ -79,6 +95,9 @@ export default async function AdminUsersSupportPage() {
         <div className="flex gap-2">
           <Link href="/admin/disputes" className="rounded border border-slate-300 px-3 py-2 text-sm">
             Open Disputes
+          </Link>
+          <Link href="/admin/returns" className="rounded border border-slate-300 px-3 py-2 text-sm">
+            Returns
           </Link>
           <Link href="/admin" className="rounded border border-slate-300 px-3 py-2 text-sm">
             Back to Dashboard

@@ -4,6 +4,8 @@ import { z } from "zod";
 
 import { Role, SellerApplicationStatus } from "@/generated/prisma/enums";
 import { authOptions } from "@/lib/auth";
+import { sendEmail, appBaseUrl } from "@/lib/email";
+import { sendPreferenceAwareEmail } from "@/lib/preference-email";
 import { prisma } from "@/lib/prisma";
 import { getSiteConfig } from "@/lib/site-config";
 
@@ -83,6 +85,52 @@ export async function PATCH(
 
     return application;
   });
+
+  // Send notification email to the applicant
+  const applicant = await prisma.user.findUnique({
+    where: { id: updated.userId },
+    select: { email: true, displayName: true },
+  });
+
+  if (applicant) {
+    const base = appBaseUrl();
+    if (approved) {
+      await sendPreferenceAwareEmail({
+        userId: updated.userId,
+        preferenceKey: "accountUpdates",
+        to: applicant.email,
+        subject: "Your Dibble seller application has been approved!",
+        html: `
+          <p>Hi ${applicant.displayName ?? applicant.email},</p>
+          <p>Great news — your application to sell on Dibble has been <strong>approved</strong>.</p>
+          <p>Your seller account is now active. Head to your <a href="${base}/seller">Seller Dashboard</a> to set up your shop, add products, and configure your delivery options.</p>
+          <p>Here is a quick checklist to get started:</p>
+          <ol>
+            <li><a href="${base}/seller/settings">Add your shop logo and description</a></li>
+            <li><a href="${base}/seller/delivery-options">Set up a delivery option</a></li>
+            <li><a href="${base}/seller/products/new">List your first product</a></li>
+            <li><a href="${base}/seller/payouts-help">Set up your payout method</a></li>
+          </ol>
+          <p>If you have any questions, just reply to this email.</p>
+          <p>Welcome aboard,<br/>The Dibble team</p>
+        `,
+      });
+    } else {
+      await sendPreferenceAwareEmail({
+        userId: updated.userId,
+        preferenceKey: "accountUpdates",
+        to: applicant.email,
+        subject: "Update on your Dibble seller application",
+        html: `
+          <p>Hi ${applicant.displayName ?? applicant.email},</p>
+          <p>Thank you for applying to sell on Dibble. Unfortunately, after review, we are not able to approve your application at this time.</p>
+          ${parsed.data.reviewNotes ? `<p><strong>Reason:</strong> ${parsed.data.reviewNotes}</p>` : ""}
+          <p>If you believe this decision was made in error or you would like to discuss it, please reply to this email.</p>
+          <p>The Dibble team</p>
+        `,
+      });
+    }
+  }
 
   return NextResponse.json({ application: updated });
 }

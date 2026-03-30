@@ -101,7 +101,6 @@ const CATEGORY_ICONS: Record<string, string> = {
   Home: "🏠",
   "Home & Living": "🏠",
   Jewellery: "✨",
-  Jewelry: "✨",
   Local: "📍",
   "Paper & Party": "🎉",
   Prints: "🖼️",

@@ -54,8 +54,8 @@ export default function CookiesPage() {
           <h2 className="text-xl font-semibold">6. Contact</h2>
           <p>
             If you have questions about cookies or data protection, contact us at
-            <a className="ml-1 text-green-700 underline" href="mailto:privacy@dibble.market">
-              privacy@dibble.market
+            <a className="ml-1 text-green-700 underline" href="mailto:contact@dibblemarketplace.com">
+              contact@dibblemarketplace.com
             </a>
             .
           </p>

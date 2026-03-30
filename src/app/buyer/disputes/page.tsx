@@ -22,7 +22,28 @@ export default async function DisputesPage() {
   const disputes = await prisma.dispute.findMany({
     where: { raisedById: session.user.id },
     include: {
-      order: { select: { id: true, totalCents: true, createdAt: true } },
+      order: {
+        select: {
+          id: true,
+          totalCents: true,
+          createdAt: true,
+          payment: {
+            select: {
+              amountCents: true,
+              refundAmountCents: true,
+              refundedAt: true,
+              refundReason: true,
+            },
+          },
+        },
+      },
+      resolvedBy: { select: { id: true, email: true, displayName: true } },
+      messages: {
+        include: {
+          sender: { select: { id: true, email: true, displayName: true, role: true } },
+        },
+        orderBy: { createdAt: "asc" },
+      },
     },
     orderBy: { createdAt: "desc" },
   });
@@ -64,9 +85,44 @@ export default async function DisputesPage() {
                   {d.status.replace("_", " ")}
                 </span>
               </div>
+              <div className="mt-3 rounded border bg-gray-50 p-3 text-sm text-gray-700">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Original dispute</p>
+                <p className="mt-2 whitespace-pre-wrap">{d.details}</p>
+              </div>
+              {d.messages.length > 0 && (
+                <div className="mt-3 space-y-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Updates</p>
+                  {d.messages.map((message) => (
+                    <div key={message.id} className="rounded border bg-white p-3 text-sm text-gray-700">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="font-medium text-gray-900">
+                          {message.sender.displayName ?? message.sender.email}
+                        </p>
+                        <p className="text-xs text-gray-400">
+                          {new Date(message.createdAt).toLocaleString()}
+                        </p>
+                      </div>
+                      <p className="mt-2 whitespace-pre-wrap">{message.body}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
               {d.resolution && (
                 <div className="mt-3 pt-3 border-t text-sm text-gray-700">
                   <strong>Resolution:</strong> {d.resolution}
+                </div>
+              )}
+              {d.order.payment?.refundedAt && (
+                <div className="mt-3 rounded border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
+                  <p className="font-medium">
+                    Refund issued: £{(d.order.payment.refundAmountCents / 100).toFixed(2)}
+                  </p>
+                  <p className="mt-1 text-xs text-emerald-800">
+                    Processed {new Date(d.order.payment.refundedAt).toLocaleString()}
+                  </p>
+                  {d.order.payment.refundReason && (
+                    <p className="mt-1 text-xs text-emerald-800">Reason: {d.order.payment.refundReason}</p>
+                  )}
                 </div>
               )}
             </li>

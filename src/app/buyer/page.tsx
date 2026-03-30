@@ -156,14 +156,26 @@ export default async function BuyerDashboardPage() {
 
       {/* Other links */}
       <div className="flex flex-wrap gap-2">
+        <Link href="/buyer/following" className="rounded-md border border-slate-700 px-3 py-2 text-sm hover:bg-slate-800">
+          Following Feed
+        </Link>
         <Link href="/buyer/disputes" className="rounded-md border border-slate-700 px-3 py-2 text-sm hover:bg-slate-800">
           My Disputes
+        </Link>
+        <Link href="/buyer/returns" className="rounded-md border border-slate-700 px-3 py-2 text-sm hover:bg-slate-800">
+          My Returns
         </Link>
         <Link href="/buyer/seller-application" className="rounded-md bg-emerald-500 px-3 py-2 text-sm font-semibold text-slate-950">
           Become a Seller
         </Link>
         <Link href="/seller" className="rounded-md border border-slate-700 px-3 py-2 text-sm hover:bg-slate-800">
           Seller Dashboard
+        </Link>
+        <Link href="/account/mfa" className="rounded-md border border-slate-700 px-3 py-2 text-sm hover:bg-slate-800">
+          Security (2FA)
+        </Link>
+        <Link href="/account/email-preferences" className="rounded-md border border-slate-700 px-3 py-2 text-sm hover:bg-slate-800">
+          Email Preferences
         </Link>
         <Link href="/admin" className="rounded-md border border-slate-700 px-3 py-2 text-sm hover:bg-slate-800">
           Admin Dashboard

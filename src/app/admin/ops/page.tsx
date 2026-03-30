@@ -11,6 +11,7 @@ import { prisma } from "@/lib/prisma";
 import { getSellerStripeAccountId } from "@/lib/site-config";
 import { listSellerPayouts } from "@/lib/seller-payout-ledger";
 import { getLaunchReadiness } from "@/lib/launch-readiness";
+import { getLastPendingPayoutAutoRetryReport } from "@/lib/pending-payout-auto-retry-store";
 import { saveReconciliationReport, getLastReconciliationReport } from "@/lib/reconciliation-report-store";
 import { getSystemHealth } from "@/lib/system-health";
 
@@ -126,10 +127,11 @@ export default async function AdminOpsPage() {
   });
 
   const reconciliation = await reconcileSellerPayouts();
-  const [systemHealth, launchReadiness, lastReconciliationReport] = await Promise.all([
+  const [systemHealth, launchReadiness, lastReconciliationReport, lastAutoRetryReport] = await Promise.all([
     getSystemHealth(),
     getLaunchReadiness(),
     getLastReconciliationReport(),
+    getLastPendingPayoutAutoRetryReport(),
   ]);
 
   return (
@@ -151,6 +153,9 @@ export default async function AdminOpsPage() {
           </Link>
           <Link href="/api/admin/ops-metrics" className="rounded-md border border-(--accent-terra) px-3 py-2 text-sm text-(--accent-terra)">
             Raw JSON
+          </Link>
+          <Link href="/api/admin/products/csv/export" className="rounded-md border border-(--accent-terra) px-3 py-2 text-sm text-(--accent-terra)">
+            Products CSV
           </Link>
           <Link href="/api/admin/system-health" className="rounded-md border border-(--accent-terra) px-3 py-2 text-sm text-(--accent-terra)">
             System Health JSON
@@ -266,6 +271,37 @@ export default async function AdminOpsPage() {
             <p className="text-xs uppercase text-foreground/50">Last Run Source</p>
             <p className="mt-1 text-xl font-semibold">{lastReconciliationReport?.source ?? "none"}</p>
           </article>
+        </div>
+
+        <div className="mt-4 rounded-md border border-(--accent-terra)/20 p-3">
+          <p className="text-xs uppercase text-foreground/50">Pending Payout Auto-Retry (Last Run)</p>
+          <p className="mt-1 text-sm text-foreground/70">
+            {lastAutoRetryReport?.generatedAt
+              ? `Ran ${new Date(lastAutoRetryReport.generatedAt).toLocaleString("en-GB")} (${lastAutoRetryReport.source})`
+              : "No auto-retry report stored yet."}
+          </p>
+          <div className="mt-2 grid gap-2 sm:grid-cols-5">
+            <div>
+              <p className="text-[11px] uppercase text-foreground/50">Scanned</p>
+              <p className="text-lg font-semibold">{lastAutoRetryReport?.scanned ?? 0}</p>
+            </div>
+            <div>
+              <p className="text-[11px] uppercase text-foreground/50">Attempted</p>
+              <p className="text-lg font-semibold">{lastAutoRetryReport?.attempted ?? 0}</p>
+            </div>
+            <div>
+              <p className="text-[11px] uppercase text-foreground/50">Transferred</p>
+              <p className="text-lg font-semibold text-emerald-700">{lastAutoRetryReport?.transferred ?? 0}</p>
+            </div>
+            <div>
+              <p className="text-[11px] uppercase text-foreground/50">No Connect</p>
+              <p className="text-lg font-semibold text-amber-700">{lastAutoRetryReport?.skippedNoConnect ?? 0}</p>
+            </div>
+            <div>
+              <p className="text-[11px] uppercase text-foreground/50">Failed</p>
+              <p className="text-lg font-semibold text-red-700">{lastAutoRetryReport?.failed ?? 0}</p>
+            </div>
+          </div>
         </div>
       </section>
 
