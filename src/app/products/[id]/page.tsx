@@ -45,6 +45,9 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
     title: `${product.title} | Buy Fresh Produce on Dibble`,
     description,
     keywords: `${product.title}, fresh produce, ${sellerName}, local food, sustainable shopping`,
+    alternates: {
+      canonical: `${baseUrl}/products/${id}`,
+    },
     openGraph: {
       type: "website",
       url: `${baseUrl}/products/${id}`,

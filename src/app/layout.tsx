@@ -18,7 +18,10 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://dibble.farm";
+const baseUrl =
+  process.env.NEXT_PUBLIC_SITE_URL ||
+  process.env.NEXTAUTH_URL ||
+  "https://dibblemarketplace.com";
 
 export const metadata: Metadata = {
   title: {
@@ -65,6 +68,7 @@ export const metadata: Metadata = {
       "Discover fresh produce from local makers on Dibble. Direct from farms to your door.",
     images: [`${baseUrl}/og-image.png`],
   },
+  category: "Marketplace",
   robots: {
     index: true,
     follow: true,
@@ -107,6 +111,18 @@ export default function RootLayout({
     sameAs: ["https://twitter.com/dibblefarm", "https://facebook.com/dibblefarm"],
   });
 
+  const webSiteSchema = {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    name: "Dibble",
+    url: baseUrl,
+    potentialAction: {
+      "@type": "SearchAction",
+      target: `${baseUrl}/buyer/marketplace?q={search_term_string}`,
+      "query-input": "required name=search_term_string",
+    },
+  };
+
   return (
     <html lang="en">
       <head>
@@ -114,6 +130,10 @@ export default function RootLayout({
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(orgSchema) }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(webSiteSchema) }}
         />
       </head>
       <body

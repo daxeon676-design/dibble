@@ -34,14 +34,14 @@ export function generateProductSchema(product: ProductSchemaData, baseUrl: strin
     image: product.imageUrls[0] || `${baseUrl}/og-image.png`,
     offers: {
       "@type": "Offer",
-      url: `${baseUrl}/product/${product.id}`,
+      url: `${baseUrl}/products/${product.id}`,
       priceCurrency: "GBP",
       price: price,
       availability: product.stock > 0 ? "InStock" : "OutOfStock",
       seller: {
         "@type": "Organization",
         name: product.sellerName,
-        url: `${baseUrl}/seller/${product.sellerId}`,
+        url: `${baseUrl}/shop/${product.sellerId}`,
       },
     },
     ...(product.rating && product.reviewCount && {

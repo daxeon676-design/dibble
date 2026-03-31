@@ -4,7 +4,10 @@ import { prisma } from "@/lib/prisma";
 export const dynamic = "force-dynamic";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const baseUrl = "https://dibble.farm";
+  const baseUrl =
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    process.env.NEXTAUTH_URL ||
+    "https://dibblemarketplace.com";
 
   try {
     // Get all active products for sitemap
@@ -29,6 +32,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         priority: 1.0,
       },
       {
+        url: `${baseUrl}/buyer/marketplace`,
+        lastModified: new Date(),
+        changeFrequency: "daily",
+        priority: 0.95,
+      },
+      {
         url: `${baseUrl}/shop`,
         lastModified: new Date(),
         changeFrequency: "hourly",
@@ -51,6 +60,30 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         lastModified: new Date(),
         changeFrequency: "monthly",
         priority: 0.6,
+      },
+      {
+        url: `${baseUrl}/terms`,
+        lastModified: new Date(),
+        changeFrequency: "monthly",
+        priority: 0.5,
+      },
+      {
+        url: `${baseUrl}/privacy`,
+        lastModified: new Date(),
+        changeFrequency: "monthly",
+        priority: 0.5,
+      },
+      {
+        url: `${baseUrl}/cookies`,
+        lastModified: new Date(),
+        changeFrequency: "monthly",
+        priority: 0.4,
+      },
+      {
+        url: `${baseUrl}/returns`,
+        lastModified: new Date(),
+        changeFrequency: "monthly",
+        priority: 0.4,
       },
 
       // Dynamic product pages

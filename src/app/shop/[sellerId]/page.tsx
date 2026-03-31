@@ -9,14 +9,47 @@ import { FollowShopButton } from "@/app/shop/[sellerId]/follow-shop-button";
 import { authOptions } from "@/lib/auth";
 import { getSellerShopProfile } from "@/lib/site-config";
 
+const baseUrl =
+  process.env.NEXT_PUBLIC_SITE_URL ||
+  process.env.NEXTAUTH_URL ||
+  "https://dibblemarketplace.com";
+
 export async function generateMetadata({ params }: { params: Promise<{ sellerId: string }> }): Promise<Metadata> {
   const { sellerId } = await params;
   const seller = await prisma.user.findUnique({
     where: { id: sellerId },
-    select: { displayName: true, email: true },
+    select: {
+      displayName: true,
+      email: true,
+      bio: true,
+      sellerApplication: { select: { shopName: true, description: true } },
+    },
   });
   if (!seller) return { title: "Shop not found" };
-  return { title: `${seller.displayName ?? seller.email} – Dibble` };
+  const shopName = seller.sellerApplication?.shopName ?? seller.displayName ?? seller.email;
+  const description =
+    seller.sellerApplication?.description ??
+    seller.bio ??
+    `Browse handmade and local products from ${shopName} on Dibble.`;
+  const shortDescription = description.slice(0, 160);
+  const url = `${baseUrl}/shop/${sellerId}`;
+
+  return {
+    title: `${shopName} – Dibble`,
+    description: shortDescription,
+    alternates: { canonical: url },
+    openGraph: {
+      type: "website",
+      url,
+      title: `${shopName} – Dibble`,
+      description: shortDescription,
+    },
+    twitter: {
+      card: "summary",
+      title: `${shopName} – Dibble`,
+      description: shortDescription,
+    },
+  };
 }
 
 export default async function SellerShopPage({

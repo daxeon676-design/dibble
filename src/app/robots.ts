@@ -4,7 +4,7 @@ export default function robots() {
       {
         userAgent: "*",
         allow: "/",
-        disallow: ["/admin", "/api", "/auth", "/account", "/dashboard", "/_next", "/public"],
+        disallow: ["/admin", "/api", "/auth", "/account", "/dashboard"],
       },
       {
         userAgent: "AdsBot-Google",
