@@ -117,6 +117,9 @@ model User {
   sellerPayouts          SellerPayout[]      @relation("SellerPayouts")
   shopProfile            ShopProfile?        @relation("ShopProfile")
   deliveryProfile        DeliveryProfile?    @relation("DeliveryProfile")
+  returnRequestsAsBuyer  ReturnRequest[]     @relation("ReturnBuyer")
+  returnRequestsAsSeller ReturnRequest[]     @relation("ReturnSeller")
+  reviewedReturnRequests ReturnRequest[]     @relation("ReturnReviewer")
 
   @@index([role])
   @@index([status])
@@ -263,6 +266,7 @@ model Order {
   items               OrderItem[]
   payment             Payment?
   dispute             Dispute?
+  returnRequest       ReturnRequest?
 
   @@index([buyerId])
   @@index([sellerId])
@@ -394,6 +398,15 @@ enum DisputeStatus {
   CLOSED
 }
 
+enum ReturnRequestStatus {
+  REQUESTED
+  APPROVED
+  REJECTED
+  RECEIVED
+  REFUNDED
+  CLOSED
+}
+
 model Dispute {
   id           String           @id @default(uuid())
   orderId      String           @unique
@@ -413,6 +426,32 @@ model Dispute {
 
   @@index([status])
   @@index([raisedById])
+}
+
+model ReturnRequest {
+  id             String              @id @default(uuid())
+  orderId        String              @unique
+  buyerId        String
+  sellerId       String
+  reason         String
+  details        String
+  status         ReturnRequestStatus @default(REQUESTED)
+  requestedAt    DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  requestedByIp  String?
+  resolutionNote String?
+  reviewedById   String?
+  reviewedAt     DateTime?
+  rmaCode        String              @unique
+  order          Order               @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  buyer          User                @relation("ReturnBuyer", fields: [buyerId], references: [id], onDelete: Restrict)
+  seller         User                @relation("ReturnSeller", fields: [sellerId], references: [id], onDelete: Restrict)
+  reviewedBy     User?               @relation("ReturnReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([buyerId, status])
+  @@index([sellerId, status])
+  @@index([status, requestedAt])
+  @@index([requestedAt])
 }
 
 model DisputeMessage {

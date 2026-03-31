@@ -61,6 +61,11 @@ export default async function Footer() {
               </Link>
             </li>
             <li>
+              <Link href="/returns" className="hover:text-(--accent-terra)">
+                Returns &amp; Refunds
+              </Link>
+            </li>
+            <li>
               <Link href="/cookies" className="hover:text-(--accent-terra)">
                 Cookie Policy
               </Link>
