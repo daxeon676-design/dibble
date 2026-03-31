@@ -4,7 +4,7 @@ import { z } from "zod";
 
 import { Role, SellerApplicationStatus } from "@/generated/prisma/enums";
 import { authOptions } from "@/lib/auth";
-import { sendEmail, appBaseUrl } from "@/lib/email";
+import { appBaseUrl } from "@/lib/email";
 import { sendPreferenceAwareEmail } from "@/lib/preference-email";
 import { prisma } from "@/lib/prisma";
 import { getSiteConfig } from "@/lib/site-config";

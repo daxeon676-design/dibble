@@ -82,8 +82,6 @@ export function HumanVerification({ onTokenChange, resetSignal = 0 }: Props) {
       return;
     }
 
-    setLoadError(null);
-
     let cancelled = false;
 
     void loadTurnstileScript()
@@ -94,6 +92,8 @@ export function HumanVerification({ onTokenChange, resetSignal = 0 }: Props) {
           }
           return;
         }
+
+        setLoadError(null);
 
         widgetIdRef.current = window.turnstile.render(containerRef.current, {
           sitekey: siteKey,

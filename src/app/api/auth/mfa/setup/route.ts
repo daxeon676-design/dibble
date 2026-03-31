@@ -19,6 +19,9 @@ export async function GET() {
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  if (session.user.role !== Role.ADMIN) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   const secret = generateSecret();
   const otpauthUrl = generateURI({
@@ -41,6 +44,9 @@ export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (session.user.role !== Role.ADMIN) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   let body: { code?: unknown; secret?: unknown };
@@ -80,22 +86,23 @@ export async function DELETE() {
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  if (session.user.role !== Role.ADMIN) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
-  if (session.user.role === Role.ADMIN) {
-    const otherMfaAdmins = await prisma.user.count({
-      where: {
-        role: Role.ADMIN,
-        mfaEnabled: true,
-        id: { not: session.user.id },
-      },
-    });
+  const otherMfaAdmins = await prisma.user.count({
+    where: {
+      role: Role.ADMIN,
+      mfaEnabled: true,
+      id: { not: session.user.id },
+    },
+  });
 
-    if (otherMfaAdmins === 0) {
-      return NextResponse.json(
-        { error: "Cannot disable MFA — you are the only admin with MFA enabled" },
-        { status: 409 }
-      );
-    }
+  if (otherMfaAdmins === 0) {
+    return NextResponse.json(
+      { error: "Cannot disable MFA — you are the only admin with MFA enabled" },
+      { status: 409 }
+    );
   }
 
   await prisma.user.update({
